@@ -3,27 +3,34 @@ use crate::datastructs::ProvidesPad;
 pub trait Blocky {
     fn get_block_size(&self) -> usize;
 }
-pub trait BlockEncrypt<T>: Blocky {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T>;
-
-    fn decrypt_block(&self, data: Vec<T>) -> Vec<T>;
+pub trait BlockEncrypt: Blocky {
+    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T>;
 }
 
-pub trait PadEncrypt<T>: BlockEncrypt<T>
-where
-    T: ProvidesPad + Clone,
-{
-    fn encrypt_with_pad(&self, data: &[T]) -> (usize, Vec<T>);
-
-    fn decrypt_with_pad(&self, data: &[T], original_size: usize) -> Vec<T>;
+pub trait BlockDecrypt: Blocky {
+    fn decrypt_block<T>(&self, data: Vec<T>) -> Vec<T>;
 }
 
-impl<T, C> PadEncrypt<T> for C
+pub trait PadEncrypt: BlockEncrypt {
+    fn encrypt_with_pad<T>(&self, data: &[T]) -> (usize, Vec<T>)
+    where
+        T: ProvidesPad + Clone;
+}
+
+pub trait PadDecrypt: BlockDecrypt {
+    fn decrypt_with_pad<T>(&self, data: &[T], original_size: usize) -> Vec<T>
+    where
+        T: Clone;
+}
+
+impl<C> PadEncrypt for C
 where
-    T: ProvidesPad + Clone,
-    C: BlockEncrypt<T>,
+    C: BlockEncrypt,
 {
-    fn encrypt_with_pad(&self, data: &[T]) -> (usize, Vec<T>) {
+    fn encrypt_with_pad<T>(&self, data: &[T]) -> (usize, Vec<T>)
+    where
+        T: ProvidesPad + Clone,
+    {
         let original_length = data.len();
 
         (
@@ -43,8 +50,16 @@ where
                 .collect::<Vec<T>>(),
         )
     }
+}
 
-    fn decrypt_with_pad(&self, data: &[T], original_size: usize) -> Vec<T> {
+impl<C> PadDecrypt for C
+where
+    C: BlockDecrypt,
+{
+    fn decrypt_with_pad<T>(&self, data: &[T], original_size: usize) -> Vec<T>
+    where
+        T: Clone,
+    {
         assert_eq!(data.len() % self.get_block_size(), 0);
         let mut decrypted = data
             .chunks(self.get_block_size())

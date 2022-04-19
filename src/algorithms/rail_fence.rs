@@ -36,8 +36,8 @@ impl Direction {
     }
 }
 
-impl<T> BlockEncrypt<T> for RailFenceCypher {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
+impl BlockEncrypt for RailFenceCypher {
+    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
         assert_eq!(data.len(), self.get_block_size());
         let mut matrix: Vec<Option<T>> = std::iter::repeat_with(|| None)
             .take(self.columns * self.rows)
@@ -59,11 +59,6 @@ impl<T> BlockEncrypt<T> for RailFenceCypher {
         }
 
         matrix.into_iter().flatten().collect()
-    }
-
-    fn decrypt_block(&self, data: Vec<T>) -> Vec<T> {
-        assert_eq!(data.len(), self.get_block_size());
-        todo!()
     }
 }
 

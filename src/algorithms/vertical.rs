@@ -29,8 +29,8 @@ impl Blocky for VerticalPermutation {
     }
 }
 
-impl<T> BlockEncrypt<T> for VerticalPermutation {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
+impl BlockEncrypt for VerticalPermutation {
+    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
         assert_eq!(data.len(), self.get_block_size());
 
         let mut vectors: Vec<Vec<T>> = std::iter::repeat_with(|| Vec::with_capacity(self.rows))
@@ -45,43 +45,16 @@ impl<T> BlockEncrypt<T> for VerticalPermutation {
         let blocks = self.permutation.encrypt_block(vectors);
         blocks.into_iter().flatten().collect()
     }
-
-    fn decrypt_block(&self, data: Vec<T>) -> Vec<T> {
-        assert_eq!(data.len(), self.get_block_size());
-
-        let mut data = data.into_iter();
-
-        let mut vectors: Vec<Vec<T>> = vec![];
-        for _ in 0..self.columns {
-            vectors.push(Vec::with_capacity(self.rows));
-            for _ in 0..self.rows {
-                vectors.last_mut().unwrap().push(data.next().unwrap());
-            }
-        }
-
-        let blocks = self.permutation.decrypt_block(vectors);
-
-        let mut columns = blocks
-            .into_iter()
-            .map(|column| column.into_iter())
-            .collect::<Vec<_>>();
-        (0..self.rows)
-            .into_iter()
-            .flat_map(|_| {
-                columns
-                    .iter_mut()
-                    .map(|column| column.next().unwrap())
-                    .collect::<Vec<T>>()
-            })
-            .collect()
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        algorithms::{permutation::SimplePermutation, vertical::VerticalPermutation},
-        cyphers::BlockEncrypt,
+        algorithms::{
+            decode::PermutationBlockDecoder, permutation::SimplePermutation,
+            vertical::VerticalPermutation,
+        },
+        cyphers::{BlockDecrypt, BlockEncrypt},
     };
 
     #[test]
@@ -92,11 +65,13 @@ mod tests {
 
         let vertical = VerticalPermutation::new(2, 4, permutation);
 
-        let encrypted = vertical.encrypt_block(original_data.clone());
+        let cypher = PermutationBlockDecoder::new(vertical);
+
+        let encrypted = cypher.encrypt_block(original_data.clone());
 
         assert_eq!(encrypted, "cgaedhbf".chars().collect::<Vec<_>>());
 
-        let decrypted = vertical.decrypt_block(encrypted);
+        let decrypted = cypher.decrypt_block(encrypted);
         assert_eq!(decrypted, original_data);
     }
 }
