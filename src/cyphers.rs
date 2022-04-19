@@ -23,6 +23,14 @@ pub trait PadDecrypt: BlockDecrypt {
         T: Clone;
 }
 
+pub trait UnpadEncrypt: BlockEncrypt {
+    fn encrypt_unpad<T: Clone>(&self, data: &[T]) -> Vec<T>;
+}
+
+pub trait UnpadDecrypt: BlockEncrypt + BlockDecrypt {
+    fn decrypt_unpad<T: Clone>(&self, data: &[T]) -> Vec<T>;
+}
+
 impl<C> PadEncrypt for C
 where
     C: BlockEncrypt,
@@ -68,5 +76,37 @@ where
             .collect::<Vec<_>>();
         decrypted.truncate(original_size);
         decrypted
+    }
+}
+
+impl<C: PadEncrypt> UnpadEncrypt for C {
+    fn encrypt_unpad<T: Clone>(&self, data: &[T]) -> Vec<T> {
+        let data = data.to_vec();
+        let data = data.into_iter().map(|data| Some(data)).collect::<Vec<_>>();
+
+        self.encrypt_with_pad(&data)
+            .1
+            .into_iter()
+            .flatten()
+            .collect()
+    }
+}
+
+impl<C: PadEncrypt + PadDecrypt> UnpadDecrypt for C {
+    fn decrypt_unpad<T: Clone>(&self, data: &[T]) -> Vec<T> {
+        let data = data.to_vec();
+        let original_length = data.len();
+        let original_placing = std::iter::repeat(true).take(data.len()).collect::<Vec<_>>();
+        let original_placing = self.encrypt_with_pad(&original_placing).1;
+        let mut data = data.into_iter();
+
+        let data = original_placing
+            .into_iter()
+            .map(|placement| if placement { data.next() } else { None })
+            .collect::<Vec<_>>();
+        self.decrypt_with_pad(data.as_slice(), original_length)
+            .into_iter()
+            .flatten()
+            .collect()
     }
 }
