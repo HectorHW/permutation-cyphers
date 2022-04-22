@@ -1,6 +1,6 @@
 use std::{collections::HashSet, mem::MaybeUninit};
 
-use crate::cyphers::{BlockEncrypt, Blocky};
+use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 #[derive(Clone, Debug)]
 pub struct SimplePermutation {
@@ -18,7 +18,7 @@ impl SimplePermutation {
         }
     }
 
-    pub(super) fn inverse(indices: &[usize]) -> Vec<usize> {
+    pub(crate) fn inverse(indices: &[usize]) -> Vec<usize> {
         let mut inverse = vec![0; indices.len()];
         for (i, &forward_index) in indices.iter().enumerate() {
             inverse[forward_index] = i;
@@ -26,7 +26,7 @@ impl SimplePermutation {
         inverse
     }
 
-    pub(super) fn run<T>(data: Vec<T>, indices: &[usize]) -> Vec<T> {
+    pub(crate) fn run<T>(data: Vec<T>, indices: &[usize]) -> Vec<T> {
         assert_eq!(indices.len(), data.len());
         let mut items: Vec<MaybeUninit<T>> = std::iter::repeat_with(|| MaybeUninit::uninit())
             .take(data.len())
@@ -43,6 +43,10 @@ impl SimplePermutation {
             .map(|item| unsafe { item.assume_init() })
             .collect()
     }
+
+    pub fn trivial(size: usize) -> Self {
+        Self::try_from((0..size).collect()).unwrap()
+    }
 }
 
 impl Blocky for SimplePermutation {
@@ -51,8 +55,14 @@ impl Blocky for SimplePermutation {
     }
 }
 
-impl BlockEncrypt for SimplePermutation {
-    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
+impl IndexEncrypt for SimplePermutation {
+    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
+        Self::run(data, &self.indices)
+    }
+}
+
+impl<T: Clone> BlockEncrypt<T> for SimplePermutation {
+    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
         Self::run(data, &self.indices)
     }
 }

@@ -1,4 +1,4 @@
-use crate::cyphers::{BlockEncrypt, Blocky};
+use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 pub struct RailFenceCypher {
     rows: usize,
@@ -12,6 +12,30 @@ impl RailFenceCypher {
         assert!(rows < columns);
 
         Self { rows, columns }
+    }
+
+    fn run<T: Clone>(&self, data: Vec<T>) -> Vec<T> {
+        assert_eq!(data.len(), self.get_block_size());
+        let mut matrix: Vec<Option<T>> = std::iter::repeat_with(|| None)
+            .take(self.columns * self.rows)
+            .collect();
+
+        let mut direction = Direction::Down;
+
+        let mut i = 0;
+
+        for (j, item) in data.into_iter().enumerate() {
+            matrix[i * self.columns + j] = Some(item);
+            i = match direction {
+                Direction::Up => i - 1,
+                Direction::Down => i + 1,
+            };
+            if i == 0 || i == self.rows - 1 {
+                direction = direction.reverse();
+            }
+        }
+
+        matrix.into_iter().flatten().collect()
     }
 }
 
@@ -36,29 +60,15 @@ impl Direction {
     }
 }
 
-impl BlockEncrypt for RailFenceCypher {
-    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
-        assert_eq!(data.len(), self.get_block_size());
-        let mut matrix: Vec<Option<T>> = std::iter::repeat_with(|| None)
-            .take(self.columns * self.rows)
-            .collect();
+impl IndexEncrypt for RailFenceCypher {
+    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
+        self.run(data)
+    }
+}
 
-        let mut direction = Direction::Down;
-
-        let mut i = 0;
-
-        for (j, item) in data.into_iter().enumerate() {
-            matrix[i * self.columns + j] = Some(item);
-            i = match direction {
-                Direction::Up => i - 1,
-                Direction::Down => i + 1,
-            };
-            if i == 0 || i == self.rows - 1 {
-                direction = direction.reverse();
-            }
-        }
-
-        matrix.into_iter().flatten().collect()
+impl<T: Clone> BlockEncrypt<T> for RailFenceCypher {
+    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
+        self.run(data)
     }
 }
 

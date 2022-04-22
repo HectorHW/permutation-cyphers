@@ -1,4 +1,4 @@
-use crate::cyphers::{BlockEncrypt, Blocky};
+use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
 
@@ -21,16 +21,8 @@ impl VerticalPermutation {
             permutation,
         }
     }
-}
 
-impl Blocky for VerticalPermutation {
-    fn get_block_size(&self) -> usize {
-        self.columns * self.rows
-    }
-}
-
-impl BlockEncrypt for VerticalPermutation {
-    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
+    pub fn run<T: Clone>(&self, data: Vec<T>) -> Vec<T> {
         assert_eq!(data.len(), self.get_block_size());
 
         let mut vectors: Vec<Vec<T>> = std::iter::repeat_with(|| Vec::with_capacity(self.rows))
@@ -44,6 +36,24 @@ impl BlockEncrypt for VerticalPermutation {
 
         let blocks = self.permutation.encrypt_block(vectors);
         blocks.into_iter().flatten().collect()
+    }
+}
+
+impl Blocky for VerticalPermutation {
+    fn get_block_size(&self) -> usize {
+        self.columns * self.rows
+    }
+}
+
+impl IndexEncrypt for VerticalPermutation {
+    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
+        self.run(data)
+    }
+}
+
+impl<T: Clone> BlockEncrypt<T> for VerticalPermutation {
+    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
+        self.run(data)
     }
 }
 

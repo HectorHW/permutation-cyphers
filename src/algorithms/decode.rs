@@ -1,51 +1,80 @@
-use crate::cyphers::{BlockDecrypt, BlockEncrypt, Blocky};
+use std::marker::PhantomData;
+
+use crate::cyphers::{BlockDecrypt, BlockEncrypt, Blocky, IndexDecrypt, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
 
-pub struct PermutationBlockDecoder<E>
+pub struct PermutationBlockDecoder<T, E>
 where
-    E: BlockEncrypt,
+    E: BlockEncrypt<T>,
+    T: Clone,
 {
     forward: E,
     backward: SimplePermutation,
+    _marker: PhantomData<T>,
 }
 
-impl<E> PermutationBlockDecoder<E>
+impl<T, E> PermutationBlockDecoder<T, E>
 where
-    E: BlockEncrypt,
+    T: Clone,
+    E: BlockEncrypt<T>,
 {
     pub fn new(encoder: E) -> Self {
-        let backward = encoder.encrypt_block((0..encoder.get_block_size()).collect());
+        let backward = encoder.encrypt_indices((0..encoder.get_block_size()).collect());
         PermutationBlockDecoder {
             forward: encoder,
             backward: SimplePermutation::try_from(backward).unwrap(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<E> Blocky for PermutationBlockDecoder<E>
+impl<T, E> Blocky for PermutationBlockDecoder<T, E>
 where
-    E: BlockEncrypt,
+    T: Clone,
+    E: BlockEncrypt<T>,
 {
     fn get_block_size(&self) -> usize {
         self.forward.get_block_size()
     }
 }
 
-impl<E> BlockEncrypt for PermutationBlockDecoder<E>
+impl<T, E> IndexEncrypt for PermutationBlockDecoder<T, E>
 where
-    E: BlockEncrypt,
+    T: Clone,
+    E: BlockEncrypt<T>,
 {
-    fn encrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
+    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
+        self.forward.encrypt_indices(data)
+    }
+}
+
+impl<T, E> BlockEncrypt<T> for PermutationBlockDecoder<T, E>
+where
+    T: Clone,
+    E: BlockEncrypt<T>,
+{
+    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
         self.forward.encrypt_block(data)
     }
 }
 
-impl<E> BlockDecrypt for PermutationBlockDecoder<E>
+impl<T, E> IndexDecrypt for PermutationBlockDecoder<T, E>
 where
-    E: BlockEncrypt,
+    T: Clone,
+    E: BlockEncrypt<T>,
 {
-    fn decrypt_block<T>(&self, data: Vec<T>) -> Vec<T> {
+    fn decrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
+        self.backward.encrypt_indices(data)
+    }
+}
+
+impl<T, E> BlockDecrypt<T> for PermutationBlockDecoder<T, E>
+where
+    T: Clone,
+    E: BlockEncrypt<T>,
+{
+    fn decrypt_block(&self, data: Vec<T>) -> Vec<T> {
         self.backward.encrypt_block(data)
     }
 }
