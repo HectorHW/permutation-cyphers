@@ -1,6 +1,6 @@
 use crate::algorithms::{
-    decode::PermutationBlockDecoder, permutation::SimplePermutation, stacked::StackedCypher,
-    vertical::VerticalPermutation,
+    decode::PermutationBlockDecoder, permutation::SimplePermutation, serialization::Serializer,
+    stacked::StackedCypher, vertical::VerticalPermutation,
 };
 
 mod algorithms;
@@ -30,4 +30,8 @@ fn main() {
     let decrypted = cypher.decrypt(&encrypted, &original_len);
 
     println!("decrypted (perm):\n{decrypted:?}");
+
+    let mut stdout = std::io::stdout();
+
+    Serializer::new(&mut stdout).write(&cypher).unwrap();
 }

@@ -4,7 +4,7 @@ use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 #[derive(Clone, Debug)]
 pub struct SimplePermutation {
-    indices: Vec<usize>,
+    pub(super) indices: Vec<usize>,
 }
 
 impl SimplePermutation {

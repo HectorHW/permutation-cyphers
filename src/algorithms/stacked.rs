@@ -49,4 +49,12 @@ impl<T: Clone + ProvidesPad> StackedCypher<T> {
                 Algorithm::Unpadding(op) => op.decrypt_unpad(&data),
             })
     }
+
+    pub(crate) fn len(&self) -> usize {
+        self.algorithms.len()
+    }
+
+    pub(crate) fn items(&self) -> impl Iterator<Item = &Algorithm<T>> {
+        self.algorithms.iter()
+    }
 }

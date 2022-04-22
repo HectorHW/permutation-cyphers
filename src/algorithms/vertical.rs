@@ -4,9 +4,9 @@ use super::permutation::SimplePermutation;
 
 #[derive(Clone, Debug)]
 pub struct VerticalPermutation {
-    rows: usize,
-    columns: usize,
-    permutation: SimplePermutation,
+    pub(super) rows: usize,
+    pub(super) columns: usize,
+    pub(super) permutation: SimplePermutation,
 }
 
 impl VerticalPermutation {

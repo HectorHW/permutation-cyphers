@@ -1,3 +1,5 @@
+use downcast_rs::{impl_downcast, Downcast};
+
 use crate::{algorithms::permutation::SimplePermutation, datastructs::ProvidesPad};
 
 pub trait Blocky {
@@ -143,20 +145,27 @@ impl<T: Clone + ProvidesPad, C: PadEncrypt<T> + PadDecrypt<T>> UnpadDecrypt<T> f
     }
 }
 
-pub trait PadCypher<T: Clone + ProvidesPad>: PadEncrypt<T> + PadDecrypt<T> {}
+pub trait PadCypher<T: Clone + ProvidesPad>: PadEncrypt<T> + PadDecrypt<T> + Downcast {}
+
+impl_downcast!(PadCypher<T> where T: ProvidesPad + Clone);
 
 impl<T, C> PadCypher<T> for C
 where
     T: Clone + ProvidesPad,
-    C: PadEncrypt<T> + PadDecrypt<T>,
+    C: PadEncrypt<T> + PadDecrypt<T> + Downcast,
 {
 }
 
-pub trait UnpadCypher<T: Clone + ProvidesPad>: UnpadEncrypt<T> + UnpadDecrypt<T> {}
+pub trait UnpadCypher<T: Clone + ProvidesPad>:
+    UnpadEncrypt<T> + UnpadDecrypt<T> + Downcast
+{
+}
+
+impl_downcast!(UnpadCypher<T> where T: ProvidesPad + Clone);
 
 impl<T, C> UnpadCypher<T> for C
 where
     T: Clone + ProvidesPad,
-    C: UnpadEncrypt<T> + UnpadDecrypt<T>,
+    C: UnpadEncrypt<T> + UnpadDecrypt<T> + Downcast,
 {
 }

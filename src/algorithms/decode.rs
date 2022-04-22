@@ -27,6 +27,10 @@ where
             _marker: PhantomData,
         }
     }
+
+    pub fn get_inner(&self) -> &E {
+        &self.forward
+    }
 }
 
 impl<T, E> Blocky for PermutationBlockDecoder<T, E>

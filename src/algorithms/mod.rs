@@ -2,5 +2,6 @@
 pub mod decode;
 pub mod permutation;
 pub mod rail_fence;
+pub mod serialization;
 pub mod stacked;
 pub mod vertical;

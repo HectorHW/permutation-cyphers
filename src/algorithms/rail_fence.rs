@@ -1,8 +1,8 @@
 use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 pub struct RailFenceCypher {
-    rows: usize,
-    columns: usize,
+    pub(super) rows: usize,
+    pub(super) columns: usize,
 }
 
 impl RailFenceCypher {
