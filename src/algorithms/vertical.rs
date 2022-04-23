@@ -1,4 +1,4 @@
-use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
+use crate::algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
 
@@ -56,11 +56,11 @@ impl BlockEncrypt for VerticalPermutation {}
 #[cfg(test)]
 mod tests {
     use crate::{
+        algorithms::cyphers::{PadDecrypt, PadEncrypt},
         algorithms::{
             decode::PermutationBlockDecoder, permutation::SimplePermutation,
             vertical::VerticalPermutation,
         },
-        cyphers::{PadDecrypt, PadEncrypt},
     };
 
     #[test]

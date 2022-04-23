@@ -1,6 +1,6 @@
 use crate::{
+    algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt},
     algorithms::permutation,
-    cyphers::{BlockEncrypt, Blocky, IndexEncrypt},
 };
 
 #[derive(Clone, Debug)]
@@ -71,7 +71,7 @@ impl BlockEncrypt for RailFenceCypher {}
 
 #[cfg(test)]
 mod tests {
-    use crate::cyphers::{BlockEncrypt, IndexEncrypt};
+    use crate::algorithms::cyphers::{BlockEncrypt, IndexEncrypt};
 
     use super::RailFenceCypher;
 

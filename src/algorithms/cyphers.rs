@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use crate::{algorithms::move_by_indices, datastructs::ProvidesPad};
 
 pub trait Blocky {
@@ -41,7 +39,7 @@ pub trait UnpadEncrypt: BlockEncrypt {
 }
 
 pub trait UnpadDecrypt: BlockEncrypt + BlockDecrypt {
-    fn decrypt_unpad<T: ProvidesPad + Clone + Debug>(&self, data: &[T]) -> Vec<T>;
+    fn decrypt_unpad<T: ProvidesPad + Clone>(&self, data: &[T]) -> Vec<T>;
 }
 
 impl<C> PadEncrypt for C
@@ -59,7 +57,8 @@ where
                         chunk
                     } else {
                         let elements_to_add = self.get_block_size() - chunk.len();
-                        chunk.append(&mut T::get_pad(elements_to_add));
+                        let mut pad = chunk[0].get_pad(elements_to_add);
+                        chunk.append(&mut pad);
                         chunk
                     }
                 })
@@ -96,7 +95,7 @@ where
 }
 
 impl<C: PadEncrypt + PadDecrypt> UnpadDecrypt for C {
-    fn decrypt_unpad<T: Clone + ProvidesPad + Debug>(&self, data: &[T]) -> Vec<T> {
+    fn decrypt_unpad<T: Clone + ProvidesPad>(&self, data: &[T]) -> Vec<T> {
         let original_size = data.len();
 
         let pad =

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
+use crate::algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 #[derive(Clone, Debug)]
 pub struct SimplePermutation {
@@ -50,8 +50,8 @@ mod test {
     use std::vec;
 
     use crate::{
+        algorithms::cyphers::{BlockDecrypt, BlockEncrypt, IndexEncrypt},
         algorithms::{decode::PermutationBlockDecoder, permutation::SimplePermutation},
-        cyphers::{BlockDecrypt, BlockEncrypt, IndexEncrypt},
     };
 
     #[test]

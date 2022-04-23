@@ -1,5 +1,5 @@
 use crate::{
-    cyphers::{PadDecrypt, PadEncrypt, UnpadDecrypt, UnpadEncrypt},
+    algorithms::cyphers::{PadDecrypt, PadEncrypt, UnpadDecrypt, UnpadEncrypt},
     datastructs::ProvidesPad,
 };
 
@@ -58,7 +58,7 @@ impl Algorithm {
             Algorithm::Vertical(p) => p.encrypt_unpad(data),
         }
     }
-    pub fn dunpad<T: Clone + ProvidesPad + Debug>(&self, data: &[T]) -> Vec<T> {
+    pub fn dunpad<T: Clone + ProvidesPad>(&self, data: &[T]) -> Vec<T> {
         match self {
             Algorithm::Permutation(p) => p.decrypt_unpad(data),
             Algorithm::RailFence(p) => p.decrypt_unpad(data),
@@ -111,7 +111,7 @@ impl StackedCypher {
             })
     }
 
-    pub fn decrypt<T: Clone + ProvidesPad + Debug>(&self, data: &[T], sizes: &[usize]) -> Vec<T> {
+    pub fn decrypt<T: Clone + ProvidesPad>(&self, data: &[T], sizes: &[usize]) -> Vec<T> {
         self.algorithms
             .iter()
             .zip(sizes.iter())

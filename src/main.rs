@@ -4,7 +4,6 @@ use crate::algorithms::{
 };
 
 mod algorithms;
-mod cyphers;
 mod datastructs;
 
 fn main() {

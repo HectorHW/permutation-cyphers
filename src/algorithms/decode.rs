@@ -1,4 +1,4 @@
-use crate::cyphers::{BlockDecrypt, BlockEncrypt, Blocky, IndexDecrypt, IndexEncrypt};
+use crate::algorithms::cyphers::{BlockDecrypt, BlockEncrypt, Blocky, IndexDecrypt, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
 
