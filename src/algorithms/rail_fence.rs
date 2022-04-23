@@ -1,5 +1,9 @@
-use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
+use crate::{
+    algorithms::permutation,
+    cyphers::{BlockEncrypt, Blocky, IndexEncrypt},
+};
 
+#[derive(Clone, Debug)]
 pub struct RailFenceCypher {
     pub(super) rows: usize,
     pub(super) columns: usize,
@@ -12,30 +16,6 @@ impl RailFenceCypher {
         assert!(rows < columns);
 
         Self { rows, columns }
-    }
-
-    fn run<T: Clone>(&self, data: Vec<T>) -> Vec<T> {
-        assert_eq!(data.len(), self.get_block_size());
-        let mut matrix: Vec<Option<T>> = std::iter::repeat_with(|| None)
-            .take(self.columns * self.rows)
-            .collect();
-
-        let mut direction = Direction::Down;
-
-        let mut i = 0;
-
-        for (j, item) in data.into_iter().enumerate() {
-            matrix[i * self.columns + j] = Some(item);
-            i = match direction {
-                Direction::Up => i - 1,
-                Direction::Down => i + 1,
-            };
-            if i == 0 || i == self.rows - 1 {
-                direction = direction.reverse();
-            }
-        }
-
-        matrix.into_iter().flatten().collect()
     }
 }
 
@@ -61,20 +41,37 @@ impl Direction {
 }
 
 impl IndexEncrypt for RailFenceCypher {
-    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
-        self.run(data)
+    fn encrypt_indices(&self) -> Vec<usize> {
+        let mut matrix: Vec<Option<usize>> = std::iter::repeat_with(|| None)
+            .take(self.columns * self.rows)
+            .collect();
+
+        let mut direction = Direction::Down;
+
+        let mut i = 0;
+
+        for j in 0..self.get_block_size() {
+            matrix[i * self.columns + j] = Some(j);
+            i = match direction {
+                Direction::Up => i - 1,
+                Direction::Down => i + 1,
+            };
+            if i == 0 || i == self.rows - 1 {
+                direction = direction.reverse();
+            }
+        }
+
+        permutation::SimplePermutation::inverse(
+            &matrix.into_iter().flatten().collect::<Vec<usize>>(),
+        )
     }
 }
 
-impl<T: Clone> BlockEncrypt<T> for RailFenceCypher {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
-        self.run(data)
-    }
-}
+impl BlockEncrypt for RailFenceCypher {}
 
 #[cfg(test)]
 mod tests {
-    use crate::cyphers::BlockEncrypt;
+    use crate::cyphers::{BlockEncrypt, IndexEncrypt};
 
     use super::RailFenceCypher;
 
@@ -87,5 +84,13 @@ mod tests {
             cypher.encrypt_block(data),
             "aebdfhcg".chars().collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn indices() {
+        let cypher = RailFenceCypher::new(3, 8);
+        // 0 1 2 3 4 5 6 7
+        // 0 4 1 3 5 7 2 6
+        assert_eq!(cypher.encrypt_indices(), vec![0, 2, 6, 3, 1, 4, 7, 5]);
     }
 }

@@ -1,6 +1,6 @@
 use crate::algorithms::{
-    decode::PermutationBlockDecoder, permutation::SimplePermutation, serialization::Serializer,
-    stacked::StackedCypher, vertical::VerticalPermutation,
+    permutation::SimplePermutation, serialization::Serializer, stacked::StackedCypher,
+    vertical::VerticalPermutation,
 };
 
 mod algorithms;
@@ -8,18 +8,16 @@ mod cyphers;
 mod datastructs;
 
 fn main() {
-    let mut cypher = StackedCypher::<usize>::new(vec![]);
+    let mut cypher = StackedCypher::new();
 
-    cypher.push_padding(PermutationBlockDecoder::new(
-        SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap(),
-    ));
-    cypher.push_unpadding(PermutationBlockDecoder::new(VerticalPermutation::new(
+    cypher.push_padding(SimplePermutation::try_from(vec![1, 3, 0, 2]).unwrap());
+    cypher.push_unpadding(VerticalPermutation::new(
         2,
         4,
         SimplePermutation::trivial(4),
-    )));
+    ));
 
-    let original_data = (1..=10).collect::<Vec<_>>();
+    let original_data = (1..=20).collect::<Vec<_>>();
 
     println!("original:\n{original_data:?}");
 

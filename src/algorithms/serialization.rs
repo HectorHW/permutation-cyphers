@@ -3,13 +3,10 @@ use std::{
     io::{self, BufRead, Write},
 };
 
-use crate::{
-    algorithms::{
-        decode::PermutationBlockDecoder,
-        permutation::SimplePermutation,
-        stacked::{Algorithm, StackedCypher},
-    },
-    datastructs::ProvidesPad,
+use crate::algorithms::{
+    decode::PermutationBlockDecoder,
+    permutation::SimplePermutation,
+    stacked::{Algorithm, PadApproach, StackedCypher},
 };
 
 use super::{rail_fence::RailFenceCypher, vertical::VerticalPermutation};
@@ -23,42 +20,18 @@ impl<'w, W: Write> Serializer<'w, W> {
         Self { writer: target }
     }
 
-    pub fn write<T: Clone + ProvidesPad + 'static>(
-        &mut self,
-        cypher: &StackedCypher<T>,
-    ) -> io::Result<()> {
+    pub fn write(&mut self, cypher: &StackedCypher) -> io::Result<()> {
         self.write_number(cypher.len())?;
-
-        macro_rules! downcast_serialize {
-            ( $b: expr) => {
-                $b.downcast_ref::<PermutationBlockDecoder<T, SimplePermutation>>()
-                    .map(PermutationBlockDecoder::get_inner)
-                    .map(|p| self.write_simple_permutation(p))
-                    .or_else(|| {
-                        $b.downcast_ref::<PermutationBlockDecoder<T, RailFenceCypher>>()
-                            .map(PermutationBlockDecoder::get_inner)
-                            .map(|p| self.write_rail_fence(p))
-                    })
-                    .or_else(|| {
-                        $b.downcast_ref::<PermutationBlockDecoder<T, VerticalPermutation>>()
-                            .map(PermutationBlockDecoder::get_inner)
-                            .map(|p| self.write_vertical_permutation(p))
-                    })
-                    .unwrap()
-            };
-        }
 
         for algorithm in cypher.items() {
             match algorithm {
-                Algorithm::Padding(b) => {
+                PadApproach::Padding(b) => {
                     self.write_str("padding")?;
-
-                    downcast_serialize!(b)
+                    self.write_permutation(b)
                 }
-                Algorithm::Unpadding(b) => {
+                PadApproach::Unpadding(b) => {
                     self.write_str("unpadding")?;
-
-                    downcast_serialize!(b)
+                    self.write_permutation(b)
                 }
             }?;
         }
@@ -98,6 +71,14 @@ impl<'w, W: Write> Serializer<'w, W> {
         self.write_number(p.rows)?;
         self.write_simple_permutation(&p.permutation)
     }
+
+    fn write_permutation(&mut self, p: &Algorithm) -> io::Result<()> {
+        match p {
+            Algorithm::Permutation(p) => self.write_simple_permutation(p.get_inner()),
+            Algorithm::RailFence(r) => self.write_rail_fence(r.get_inner()),
+            Algorithm::Vertical(v) => self.write_vertical_permutation(v.get_inner()),
+        }
+    }
 }
 
 pub struct Deserializer<R: BufRead> {
@@ -109,46 +90,23 @@ impl<R: BufRead> Deserializer<R> {
         Self { reader }
     }
 
-    pub fn read<T: ProvidesPad + Clone + 'static>(
-        &mut self,
-    ) -> Result<StackedCypher<T>, Box<dyn Error>> {
+    pub fn read(&mut self) -> Result<StackedCypher, Box<dyn Error>> {
         let size = self.read_number()?;
 
-        Ok(StackedCypher::<T>::new(
-            (0..size)
-                .map(|_| {
-                    let tag = self.read_string()?;
+        let mut res = StackedCypher::new();
 
-                    macro_rules! read_permutation {
-                        ($v:expr) => {{
-                            let name = self.read_string()?;
+        for _ in 0..size {
+            let approach = self.read_string()?;
 
-                            $v(match name.as_str() {
-                                "simple" => Box::new(PermutationBlockDecoder::new(
-                                    self.read_simple_permutation()?,
-                                )),
-                                "vertical" => {
-                                    Box::new(PermutationBlockDecoder::new(self.read_vertical()?))
-                                }
-                                "rail" => {
-                                    Box::new(PermutationBlockDecoder::new(self.read_rail_fence()?))
-                                }
+            let algo = self.read_permutation()?;
+            match approach.as_str() {
+                "padding" => res.push_padding(algo),
+                "unpadding" => res.push_unpadding(algo),
+                other => return Err(format!("unknown approach {other}").into()),
+            }
+        }
 
-                                other => {
-                                    return Err(format!("unknown permutation type {other}").into());
-                                }
-                            })
-                        }};
-                    }
-
-                    match tag.as_str() {
-                        "padding" => Ok(read_permutation!(Algorithm::Padding)),
-                        "unpadding" => Ok(read_permutation!(Algorithm::Unpadding)),
-                        other => Err(format!("unknown pad mode {other}").into()),
-                    }
-                })
-                .collect::<Result<Vec<_>, Box<dyn Error>>>()?,
-        ))
+        Ok(res)
     }
 
     fn read_string(&mut self) -> Result<String, Box<dyn Error>> {
@@ -189,6 +147,22 @@ impl<R: BufRead> Deserializer<R> {
 
         Ok(VerticalPermutation::new(rows, columns, permutation))
     }
+
+    fn read_permutation(&mut self) -> Result<Algorithm, Box<dyn Error>> {
+        let tag = self.read_string()?;
+
+        Ok(match tag.as_str() {
+            "simple" => Algorithm::Permutation(PermutationBlockDecoder::new(
+                self.read_simple_permutation()?,
+            )),
+            "vertical" => Algorithm::Vertical(PermutationBlockDecoder::new(self.read_vertical()?)),
+            "rail" => Algorithm::RailFence(PermutationBlockDecoder::new(self.read_rail_fence()?)),
+
+            other => {
+                return Err(format!("unknown permutation type {other}").into());
+            }
+        })
+    }
 }
 
 #[cfg(test)]
@@ -196,24 +170,21 @@ mod tests {
     use std::io::BufWriter;
 
     use crate::algorithms::{
-        decode::PermutationBlockDecoder, permutation::SimplePermutation, stacked::StackedCypher,
-        vertical::VerticalPermutation,
+        permutation::SimplePermutation, stacked::StackedCypher, vertical::VerticalPermutation,
     };
 
     use super::{Deserializer, Serializer};
 
     #[test]
     fn should_serialize() {
-        let mut cypher = StackedCypher::<usize>::new(vec![]);
+        let mut cypher = StackedCypher::new();
 
-        cypher.push_padding(PermutationBlockDecoder::new(
-            SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap(),
-        ));
-        cypher.push_unpadding(PermutationBlockDecoder::new(VerticalPermutation::new(
+        cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
+        cypher.push_unpadding(VerticalPermutation::new(
             2,
             4,
             SimplePermutation::trivial(4),
-        )));
+        ));
 
         let expected = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
         let mut buf = BufWriter::new(Vec::new());
@@ -229,16 +200,14 @@ mod tests {
         let source = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
 
         let expected = {
-            let mut cypher = StackedCypher::<usize>::new(vec![]);
+            let mut cypher = StackedCypher::new();
 
-            cypher.push_padding(PermutationBlockDecoder::new(
-                SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap(),
-            ));
-            cypher.push_unpadding(PermutationBlockDecoder::new(VerticalPermutation::new(
+            cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
+            cypher.push_unpadding(VerticalPermutation::new(
                 2,
                 4,
                 SimplePermutation::trivial(4),
-            )));
+            ));
             cypher
         };
 

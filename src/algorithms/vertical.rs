@@ -46,16 +46,12 @@ impl Blocky for VerticalPermutation {
 }
 
 impl IndexEncrypt for VerticalPermutation {
-    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
-        self.run(data)
+    fn encrypt_indices(&self) -> Vec<usize> {
+        self.run((0..self.get_block_size()).collect())
     }
 }
 
-impl<T: Clone> BlockEncrypt<T> for VerticalPermutation {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
-        self.run(data)
-    }
-}
+impl BlockEncrypt for VerticalPermutation {}
 
 #[cfg(test)]
 mod tests {
@@ -64,7 +60,7 @@ mod tests {
             decode::PermutationBlockDecoder, permutation::SimplePermutation,
             vertical::VerticalPermutation,
         },
-        cyphers::{BlockDecrypt, BlockEncrypt},
+        cyphers::{PadDecrypt, PadEncrypt},
     };
 
     #[test]
@@ -77,11 +73,11 @@ mod tests {
 
         let cypher = PermutationBlockDecoder::new(vertical);
 
-        let encrypted = cypher.encrypt_block(original_data.clone());
+        let (size, encrypted) = cypher.encrypt_with_pad(&original_data);
 
         assert_eq!(encrypted, "cgaedhbf".chars().collect::<Vec<_>>());
 
-        let decrypted = cypher.decrypt_block(encrypted);
+        let decrypted = cypher.decrypt_with_pad(&encrypted, size);
         assert_eq!(decrypted, original_data);
     }
 }

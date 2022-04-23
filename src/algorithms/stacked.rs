@@ -1,37 +1,109 @@
 use crate::{
-    cyphers::{PadCypher, UnpadCypher},
+    cyphers::{PadDecrypt, PadEncrypt, UnpadDecrypt, UnpadEncrypt},
     datastructs::ProvidesPad,
 };
 
-pub enum Algorithm<T> {
-    Padding(Box<dyn PadCypher<T>>),
-    Unpadding(Box<dyn UnpadCypher<T>>),
+use std::fmt::Debug;
+
+use super::{
+    decode::PermutationBlockDecoder, permutation::SimplePermutation, rail_fence::RailFenceCypher,
+    vertical::VerticalPermutation,
+};
+
+#[derive(Clone, Debug)]
+pub enum Algorithm {
+    Permutation(PermutationBlockDecoder<SimplePermutation>),
+    RailFence(PermutationBlockDecoder<RailFenceCypher>),
+    Vertical(PermutationBlockDecoder<VerticalPermutation>),
 }
 
-pub struct StackedCypher<T> {
-    algorithms: Vec<Algorithm<T>>,
+impl From<SimplePermutation> for Algorithm {
+    fn from(p: SimplePermutation) -> Self {
+        Algorithm::Permutation(PermutationBlockDecoder::new(p))
+    }
 }
 
-impl<T: Clone + ProvidesPad> StackedCypher<T> {
-    pub fn new(algorithms: Vec<Algorithm<T>>) -> Self {
-        StackedCypher { algorithms }
+impl From<RailFenceCypher> for Algorithm {
+    fn from(p: RailFenceCypher) -> Self {
+        Algorithm::RailFence(PermutationBlockDecoder::new(p))
+    }
+}
+
+impl From<VerticalPermutation> for Algorithm {
+    fn from(p: VerticalPermutation) -> Self {
+        Algorithm::Vertical(PermutationBlockDecoder::new(p))
+    }
+}
+
+impl Algorithm {
+    pub fn epad<T: Clone + ProvidesPad>(&self, data: &[T]) -> (usize, Vec<T>) {
+        match self {
+            Algorithm::Permutation(p) => p.encrypt_with_pad(data),
+            Algorithm::RailFence(p) => p.encrypt_with_pad(data),
+            Algorithm::Vertical(p) => p.encrypt_with_pad(data),
+        }
+    }
+    pub fn dpad<T: Clone + ProvidesPad>(&self, data: &[T], original_size: usize) -> Vec<T> {
+        match self {
+            Algorithm::Permutation(p) => p.decrypt_with_pad(data, original_size),
+            Algorithm::RailFence(p) => p.decrypt_with_pad(data, original_size),
+            Algorithm::Vertical(p) => p.decrypt_with_pad(data, original_size),
+        }
     }
 
-    pub fn push_padding<C: PadCypher<T> + 'static>(&mut self, cypher: C) {
-        self.algorithms.push(Algorithm::Padding(Box::new(cypher)));
+    pub fn eunpad<T: Clone + ProvidesPad>(&self, data: &[T]) -> Vec<T> {
+        match self {
+            Algorithm::Permutation(p) => p.encrypt_unpad(data),
+            Algorithm::RailFence(p) => p.encrypt_unpad(data),
+            Algorithm::Vertical(p) => p.encrypt_unpad(data),
+        }
+    }
+    pub fn dunpad<T: Clone + ProvidesPad + Debug>(&self, data: &[T]) -> Vec<T> {
+        match self {
+            Algorithm::Permutation(p) => p.decrypt_unpad(data),
+            Algorithm::RailFence(p) => p.decrypt_unpad(data),
+            Algorithm::Vertical(p) => p.decrypt_unpad(data),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum PadApproach {
+    Padding(Algorithm),
+    Unpadding(Algorithm),
+}
+
+#[derive(Clone, Debug)]
+pub struct StackedCypher {
+    algorithms: Vec<PadApproach>,
+}
+
+impl StackedCypher {
+    pub fn new() -> Self {
+        StackedCypher { algorithms: vec![] }
     }
 
-    pub fn push_unpadding<C: UnpadCypher<T> + 'static>(&mut self, cypher: C) {
-        self.algorithms.push(Algorithm::Unpadding(Box::new(cypher)));
+    pub fn push_padding<C>(&mut self, cypher: C)
+    where
+        Algorithm: From<C>,
+    {
+        self.algorithms.push(PadApproach::Padding(cypher.into()));
     }
 
-    pub fn encrypt(&self, data: &[T]) -> (Vec<usize>, Vec<T>) {
+    pub fn push_unpadding<C>(&mut self, cypher: C)
+    where
+        Algorithm: From<C>,
+    {
+        self.algorithms.push(PadApproach::Unpadding(cypher.into()));
+    }
+
+    pub fn encrypt<T: Clone + ProvidesPad>(&self, data: &[T]) -> (Vec<usize>, Vec<T>) {
         self.algorithms
             .iter()
             .fold((vec![], data.to_vec()), |(mut indices, data), op| {
                 let (created_indices, data) = match op {
-                    Algorithm::Padding(op) => op.encrypt_with_pad(&data),
-                    Algorithm::Unpadding(op) => (data.len(), op.encrypt_unpad(&data)),
+                    PadApproach::Padding(op) => op.epad(&data),
+                    PadApproach::Unpadding(op) => (data.len(), op.eunpad(&data)),
                 };
 
                 indices.push(created_indices);
@@ -39,14 +111,14 @@ impl<T: Clone + ProvidesPad> StackedCypher<T> {
             })
     }
 
-    pub fn decrypt(&self, data: &[T], sizes: &[usize]) -> Vec<T> {
+    pub fn decrypt<T: Clone + ProvidesPad + Debug>(&self, data: &[T], sizes: &[usize]) -> Vec<T> {
         self.algorithms
             .iter()
             .zip(sizes.iter())
             .rev()
             .fold(data.to_vec(), |data, (op, &size)| match op {
-                Algorithm::Padding(op) => op.decrypt_with_pad(&data, size),
-                Algorithm::Unpadding(op) => op.decrypt_unpad(&data),
+                PadApproach::Padding(op) => op.dpad(&data, size),
+                PadApproach::Unpadding(op) => op.dunpad(&data),
             })
     }
 
@@ -54,7 +126,7 @@ impl<T: Clone + ProvidesPad> StackedCypher<T> {
         self.algorithms.len()
     }
 
-    pub(crate) fn items(&self) -> impl Iterator<Item = &Algorithm<T>> {
+    pub(crate) fn items(&self) -> impl Iterator<Item = &PadApproach> {
         self.algorithms.iter()
     }
 }

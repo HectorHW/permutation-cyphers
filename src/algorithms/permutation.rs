@@ -1,4 +1,4 @@
-use std::{collections::HashSet, mem::MaybeUninit};
+use std::collections::HashSet;
 
 use crate::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
@@ -26,24 +26,6 @@ impl SimplePermutation {
         inverse
     }
 
-    pub(crate) fn run<T>(data: Vec<T>, indices: &[usize]) -> Vec<T> {
-        assert_eq!(indices.len(), data.len());
-        let mut items: Vec<MaybeUninit<T>> = std::iter::repeat_with(|| MaybeUninit::uninit())
-            .take(data.len())
-            .collect();
-
-        for (&target_idx, data) in indices.iter().zip(data.into_iter()) {
-            items[target_idx].write(data);
-        }
-
-        items
-            .into_iter()
-            //this is safe because all indices are present in permutation
-            // => all indices are written exactly once
-            .map(|item| unsafe { item.assume_init() })
-            .collect()
-    }
-
     pub fn trivial(size: usize) -> Self {
         Self::try_from((0..size).collect()).unwrap()
     }
@@ -56,35 +38,35 @@ impl Blocky for SimplePermutation {
 }
 
 impl IndexEncrypt for SimplePermutation {
-    fn encrypt_indices(&self, data: Vec<usize>) -> Vec<usize> {
-        Self::run(data, &self.indices)
+    fn encrypt_indices(&self) -> Vec<usize> {
+        self.indices.clone()
     }
 }
 
-impl<T: Clone> BlockEncrypt<T> for SimplePermutation {
-    fn encrypt_block(&self, data: Vec<T>) -> Vec<T> {
-        Self::run(data, &self.indices)
-    }
-}
+impl BlockEncrypt for SimplePermutation {}
 
 #[cfg(test)]
 mod test {
+    use std::vec;
+
     use crate::{
         algorithms::{decode::PermutationBlockDecoder, permutation::SimplePermutation},
-        cyphers::{BlockDecrypt, BlockEncrypt},
+        cyphers::{BlockDecrypt, BlockEncrypt, IndexEncrypt},
     };
 
     #[test]
     fn permutation() {
-        let permutation = SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap();
+        let permutation = SimplePermutation::try_from(vec![1, 3, 0, 2]).unwrap();
 
         let cypher = PermutationBlockDecoder::new(permutation);
 
-        let original_data = (1..=4).collect::<Vec<_>>();
+        assert_eq!(cypher.encrypt_indices(), vec![1, 3, 0, 2]);
+
+        let original_data = "abcd".chars().collect::<Vec<_>>();
 
         let encrypted = cypher.encrypt_block(original_data.clone());
 
-        assert_eq!(encrypted, vec![3, 4, 2, 1]);
+        assert_eq!(encrypted, "cadb".chars().collect::<Vec<_>>());
 
         let decrypted = cypher.decrypt_block(encrypted);
         assert_eq!(decrypted, original_data);
