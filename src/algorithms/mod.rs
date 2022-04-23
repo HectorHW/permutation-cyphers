@@ -7,6 +7,7 @@ use crate::datastructs::{groups_from_str, string_from_groups, BitVector};
 use self::stacked::StackedCypher;
 pub mod cyphers;
 pub mod decode;
+pub mod generation;
 pub mod permutation;
 pub mod rail_fence;
 pub mod serialization;
