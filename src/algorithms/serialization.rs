@@ -24,10 +24,10 @@ impl<'w, W: Write> Serializer<'w, W> {
 
     pub fn write(&mut self, encryption: &Encryption) -> io::Result<()> {
         let tag = match encryption.get_style() {
-            super::EncryptionStyle::BitLevel => "bit".to_string(),
-            super::EncryptionStyle::ByteLevel => "byte".to_string(),
-            super::EncryptionStyle::CharLevel => "char".to_string(),
-            super::EncryptionStyle::GroupLevel(g) => format!("group {g}"),
+            super::EncryptionStyle::Bit => "bit".to_string(),
+            super::EncryptionStyle::Byte => "byte".to_string(),
+            super::EncryptionStyle::Char => "char".to_string(),
+            super::EncryptionStyle::Group(g) => format!("group {g}"),
         };
 
         self.write_str(&tag)?;
@@ -108,12 +108,12 @@ impl<R: BufRead> Deserializer<R> {
     pub fn read(&mut self) -> Result<Encryption, Box<dyn Error>> {
         let tag = self.read_string()?;
         let style = match tag.as_str() {
-            "bit" => EncryptionStyle::BitLevel,
-            "byte" => EncryptionStyle::ByteLevel,
-            "char" => EncryptionStyle::CharLevel,
+            "bit" => EncryptionStyle::Bit,
+            "byte" => EncryptionStyle::Byte,
+            "char" => EncryptionStyle::Char,
             "group" => {
                 let size = self.read_number()?;
-                EncryptionStyle::GroupLevel(size)
+                EncryptionStyle::Group(size)
             }
             other => return Err(format!("unknown encryption style {other}").into()),
         };
@@ -268,7 +268,7 @@ mod tests {
             cypher
         };
 
-        let encryption = Encryption::new(cypher, EncryptionStyle::GroupLevel(3));
+        let encryption = Encryption::new(cypher, EncryptionStyle::Group(3));
 
         let mut buf = BufWriter::new(Vec::new());
 

@@ -57,10 +57,10 @@ pub struct Encryption {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EncryptionStyle {
-    BitLevel,
-    ByteLevel,
-    CharLevel,
-    GroupLevel(usize),
+    Bit,
+    Byte,
+    Char,
+    Group(usize),
 }
 
 impl Encryption {
@@ -79,24 +79,24 @@ impl Encryption {
     pub fn accepts_characters(&self) -> bool {
         matches!(
             self.style,
-            EncryptionStyle::CharLevel | EncryptionStyle::GroupLevel(_)
+            EncryptionStyle::Char | EncryptionStyle::Group(_)
         )
     }
 
     pub fn encrypt_text(&self, data: &str) -> Result<(Vec<usize>, String), Box<dyn Error>> {
         match self.style {
-            EncryptionStyle::BitLevel => {
+            EncryptionStyle::Bit => {
                 Err("cannot perform encryption text -> text on bit level".into())
             }
-            EncryptionStyle::ByteLevel => {
+            EncryptionStyle::Byte => {
                 Err("cannot perform encryption text -> text on byte level".into())
             }
-            EncryptionStyle::CharLevel => {
+            EncryptionStyle::Char => {
                 let data = data.chars().collect::<Vec<_>>();
                 let (size, encrypted) = self.algorithm.encrypt(&data);
                 Ok((size, encrypted.into_iter().collect()))
             }
-            EncryptionStyle::GroupLevel(group_size) => {
+            EncryptionStyle::Group(group_size) => {
                 if data.len() % group_size != 0 {
                     return Err(
                         format!(
@@ -113,16 +113,16 @@ impl Encryption {
 
     pub fn encrypt_raw(&self, data: &[u8]) -> Result<(Vec<usize>, Vec<u8>), Box<dyn Error>> {
         match self.style {
-            EncryptionStyle::BitLevel => {
+            EncryptionStyle::Bit => {
                 let data = BitVector::from(data);
                 let (sizes, encrypted) = self.algorithm.encrypt(&data.0);
                 Ok((sizes, BitVector::from(encrypted).into()))
             }
-            EncryptionStyle::ByteLevel => Ok(self.algorithm.encrypt(data)),
-            EncryptionStyle::CharLevel => {
+            EncryptionStyle::Byte => Ok(self.algorithm.encrypt(data)),
+            EncryptionStyle::Char => {
                 Err("cannot perform raw -> raw encryption on char level".into())
             }
-            EncryptionStyle::GroupLevel(_) => {
+            EncryptionStyle::Group(_) => {
                 Err("cannot perform raw -> raw encryption on char group level".into())
             }
         }
@@ -131,19 +131,19 @@ impl Encryption {
     pub fn decrypt_text(&self, data: (Vec<usize>, Vec<u8>)) -> Result<String, Box<dyn Error>> {
         let (sizes, data) = data;
         match self.style {
-            EncryptionStyle::BitLevel => {
+            EncryptionStyle::Bit => {
                 String::from_utf8(self.decrypt_raw((sizes, data))?).map_err(|e| e.into())
             }
-            EncryptionStyle::ByteLevel => {
+            EncryptionStyle::Byte => {
                 String::from_utf8(self.decrypt_raw((sizes, data))?).map_err(|e| e.into())
             }
-            EncryptionStyle::CharLevel => {
+            EncryptionStyle::Char => {
                 let data = String::from_utf8(data.to_vec())?;
                 let chars = data.chars().collect::<Vec<_>>();
                 let decrypted = self.algorithm.decrypt(&chars, &sizes);
                 Ok(decrypted.into_iter().collect())
             }
-            EncryptionStyle::GroupLevel(group_size) => {
+            EncryptionStyle::Group(group_size) => {
                 let data = String::from_utf8(data.to_vec())?;
                 let groups = groups_from_str(&data, group_size);
                 let decrypted = self.algorithm.decrypt(&groups, &sizes);
@@ -155,16 +155,14 @@ impl Encryption {
     pub fn decrypt_raw(&self, data: (Vec<usize>, Vec<u8>)) -> Result<Vec<u8>, Box<dyn Error>> {
         let (sizes, data) = data;
         match self.style {
-            EncryptionStyle::BitLevel => {
+            EncryptionStyle::Bit => {
                 let data = BitVector::from(data.as_slice());
                 let decrypted = self.algorithm.decrypt(&data.0, &sizes);
                 Ok(BitVector::from(decrypted).into())
             }
-            EncryptionStyle::ByteLevel => Ok(self.algorithm.decrypt(&data, &sizes)),
-            EncryptionStyle::CharLevel => Err("cannot decrypt to raw on char level".into()),
-            EncryptionStyle::GroupLevel(_) => {
-                Err("cannot decrypt to raw on char group level".into())
-            }
+            EncryptionStyle::Byte => Ok(self.algorithm.decrypt(&data, &sizes)),
+            EncryptionStyle::Char => Err("cannot decrypt to raw on char level".into()),
+            EncryptionStyle::Group(_) => Err("cannot decrypt to raw on char group level".into()),
         }
     }
 }
@@ -211,9 +209,9 @@ mod usecase_tests {
 
     #[test]
     fn should_work_with_text() {
-        raw_text_for_style(EncryptionStyle::BitLevel);
-        raw_text_for_style(EncryptionStyle::ByteLevel);
-        text_text_for_style(EncryptionStyle::CharLevel);
-        text_text_for_style(EncryptionStyle::GroupLevel(2));
+        raw_text_for_style(EncryptionStyle::Bit);
+        raw_text_for_style(EncryptionStyle::Byte);
+        text_text_for_style(EncryptionStyle::Char);
+        text_text_for_style(EncryptionStyle::Group(2));
     }
 }

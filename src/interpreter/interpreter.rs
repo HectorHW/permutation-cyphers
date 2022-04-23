@@ -1,4 +1,8 @@
-use std::error::Error;
+use std::{
+    error::Error,
+    fs::File,
+    io::{Read, Write},
+};
 
 use crate::{
     algorithms::{
@@ -8,7 +12,7 @@ use crate::{
     database::Database,
 };
 
-use super::ast::Stmt;
+use super::parse::{DataSource, DataTarget, DecryptSource, PickApproach, Stmt};
 
 pub struct Interpreter {
     db: Option<Database>,
@@ -34,11 +38,11 @@ impl Interpreter {
                 let mut file = options.read(true).write(true);
 
                 match create {
-                    super::ast::PickApproach::Create => {
+                    PickApproach::Create => {
                         file = file.create_new(true);
                     }
-                    super::ast::PickApproach::Load => file = file.create(false),
-                    super::ast::PickApproach::Any => file = file.create(true),
+                    PickApproach::Load => file = file.create(false),
+                    PickApproach::Any => file = file.create(true),
                 }
 
                 let file = file
@@ -113,6 +117,118 @@ impl Interpreter {
 
                 format!("style: {style:?}; algorithms: [{items}]")
             }),
+            Stmt::Encrypt { from, key, to } => {
+                let db = self.require_database()?;
+
+                let key = db.get(key).ok_or_else(|| format!("no key {key}"))?;
+
+                if key.accepts_characters() {
+                    let data = match from {
+                        DataSource::String(s) => s.clone(),
+                        DataSource::File(f) => std::fs::read_to_string(f)?,
+                    };
+                    let (sizes, msg) = key.encrypt_text(&data)?;
+
+                    match to {
+                        DataTarget::Console => Ok(format!("{sizes:?} {msg}")),
+                        DataTarget::File(f) => {
+                            let mut file = File::options().write(true).create(true).open(f)?;
+                            file.write_fmt(format_args!("{sizes:?} \"{msg}\""))?;
+                            Ok(format!("written {f}"))
+                        }
+                    }
+                } else {
+                    let data = match from {
+                        DataSource::String(s) => s.clone().into_bytes(),
+                        DataSource::File(f) => std::fs::read(f)?,
+                    };
+
+                    let (sizes, msg) = key.encrypt_raw(&data)?;
+
+                    match to {
+                        DataTarget::Console => Ok(format!("{sizes:?} {msg:?}")),
+                        DataTarget::File(f) => {
+                            let mut file = File::options().write(true).create(true).open(f)?;
+
+                            file.write_all(&sizes.len().to_be_bytes())?;
+
+                            for size in sizes {
+                                file.write_all(&size.to_be_bytes())?;
+                            }
+                            file.write_all(msg.as_slice())?;
+                            Ok(format!("written {f}"))
+                        }
+                    }
+                }
+            }
+            Stmt::Decrypt { from, key, to } => {
+                let db = self.require_database()?;
+
+                let key = db.get(key).ok_or_else(|| format!("no key {key}"))?;
+
+                let data = match from {
+                    DecryptSource::ConsoleString(sizes, s) => {
+                        (sizes.clone(), s.to_string().into_bytes())
+                    }
+
+                    DecryptSource::ConsoleRaw(sizes, data) => (sizes.clone(), data.clone()),
+
+                    DecryptSource::File(f) => {
+                        let mut file = File::options().read(true).open(f)?;
+                        if key.accepts_characters() {
+                            use super::parse;
+                            let mut content = String::new();
+                            file.read_to_string(&mut content)?;
+                            let (sizes, input) = parse::command_parser::string_data(&content)
+                                .map_err(|e| format!("failed to parse input file: {e}"))?;
+                            (sizes, input.into_bytes())
+                        } else {
+                            let mut buf = [0u8; std::mem::size_of::<usize>()];
+                            file.read_exact(&mut buf)?;
+
+                            let total_indices = usize::from_be_bytes(buf);
+
+                            let mut sizes = vec![];
+
+                            for _ in 0..total_indices {
+                                let mut buf = [0u8; std::mem::size_of::<usize>()];
+                                file.read_exact(&mut buf)?;
+                                sizes.push(usize::from_be_bytes(buf));
+                            }
+                            let mut data = vec![];
+                            file.read_to_end(&mut data)?;
+                            (sizes, data)
+                        }
+                    }
+                };
+
+                if key.accepts_characters() {
+                    let message = key.decrypt_text(data)?;
+
+                    match to {
+                        DataTarget::Console => Ok(message),
+                        DataTarget::File(f) => {
+                            let mut file = File::options().write(true).create(true).open(f)?;
+                            file.write_all(message.as_bytes())?;
+                            Ok(format!("written {f}"))
+                        }
+                    }
+                } else {
+                    let message = key.decrypt_raw(data)?;
+
+                    match to {
+                        DataTarget::Console => Ok(format!(
+                            "{message:?} ({})",
+                            String::from_utf8_lossy(&message)
+                        )),
+                        DataTarget::File(f) => {
+                            let mut file = File::options().write(true).create(true).open(f)?;
+                            file.write_all(message.as_slice())?;
+                            Ok(format!("written {f}"))
+                        }
+                    }
+                }
+            }
         }
     }
 }
