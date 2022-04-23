@@ -1,34 +1,53 @@
-use crate::algorithms::{
-    permutation::SimplePermutation, serialization::Serializer, stacked::StackedCypher,
-    vertical::VerticalPermutation,
+use std::{
+    error::Error,
+    io::{stdin, BufRead},
 };
 
+use interpreter::{interpreter::Interpreter, parse};
+
 mod algorithms;
+mod database;
 mod datastructs;
-
+mod interpreter;
 fn main() {
-    let mut cypher = StackedCypher::new();
+    let mut interpreter = Interpreter::new();
 
-    cypher.push_padding(SimplePermutation::try_from(vec![1, 3, 0, 2]).unwrap());
-    cypher.push_unpadding(VerticalPermutation::new(
-        2,
-        4,
-        SimplePermutation::trivial(4),
-    ));
+    let stdin = stdin();
+    let mut stdin = stdin.lock();
 
-    let original_data = (1..=20).collect::<Vec<_>>();
+    let mut buffer = String::new();
 
-    println!("original:\n{original_data:?}");
+    loop {
+        buffer.clear();
+        stdin
+            .read_line(&mut buffer)
+            .expect("error while reading from stdin");
+        buffer = buffer.trim_end_matches(char::is_whitespace).to_string();
+        match execute_statement(&mut interpreter, &buffer) {
+            Ok(ExecResult::Ok(m)) => println!("OK. {}", m),
 
-    let (original_len, encrypted) = cypher.encrypt(&original_data);
+            Ok(ExecResult::Exit) => break,
+            Err(e) => println!("ERROR. {e}"),
+        }
+    }
+}
 
-    println!("encrypted (perm):\n{encrypted:?} (original len {original_len:?})");
+enum ExecResult {
+    Ok(String),
+    Exit,
+}
 
-    let decrypted = cypher.decrypt(&encrypted, &original_len);
+fn execute_statement(
+    interpreter: &mut Interpreter,
+    line: &str,
+) -> Result<ExecResult, Box<dyn Error>> {
+    use parse::command_parser;
 
-    println!("decrypted (perm):\n{decrypted:?}");
+    if line.to_string().to_uppercase() == "EXIT" {
+        return Ok(ExecResult::Exit);
+    }
 
-    let mut stdout = std::io::stdout();
+    let stmt = command_parser::stmt(line)?;
 
-    Serializer::new(&mut stdout).write_cypher(&cypher).unwrap();
+    interpreter.visit_stmt(&stmt).map(ExecResult::Ok)
 }

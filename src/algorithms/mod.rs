@@ -72,6 +72,10 @@ impl Encryption {
         self.style
     }
 
+    pub fn get_algorithm(&self) -> &StackedCypher {
+        &self.algorithm
+    }
+
     pub fn accepts_characters(&self) -> bool {
         matches!(
             self.style,
