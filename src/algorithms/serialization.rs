@@ -9,7 +9,9 @@ use crate::algorithms::{
     stacked::{Algorithm, PadApproach, StackedCypher},
 };
 
-use super::{rail_fence::RailFenceCypher, vertical::VerticalPermutation};
+use super::{
+    rail_fence::RailFenceCypher, vertical::VerticalPermutation, Encryption, EncryptionStyle,
+};
 
 pub struct Serializer<'w, W: Write> {
     writer: &'w mut W,
@@ -20,7 +22,20 @@ impl<'w, W: Write> Serializer<'w, W> {
         Self { writer: target }
     }
 
-    pub fn write(&mut self, cypher: &StackedCypher) -> io::Result<()> {
+    pub fn write(&mut self, encryption: &Encryption) -> io::Result<()> {
+        let tag = match encryption.get_style() {
+            super::EncryptionStyle::BitLevel => "bit".to_string(),
+            super::EncryptionStyle::ByteLevel => "byte".to_string(),
+            super::EncryptionStyle::CharLevel => "char".to_string(),
+            super::EncryptionStyle::GroupLevel(g) => format!("group {g}"),
+        };
+
+        self.write_str(&tag)?;
+
+        self.write_cypher(&encryption.algorithm)
+    }
+
+    pub fn write_cypher(&mut self, cypher: &StackedCypher) -> io::Result<()> {
         self.write_number(cypher.len())?;
 
         for algorithm in cypher.items() {
@@ -90,7 +105,23 @@ impl<R: BufRead> Deserializer<R> {
         Self { reader }
     }
 
-    pub fn read(&mut self) -> Result<StackedCypher, Box<dyn Error>> {
+    pub fn read(&mut self) -> Result<Encryption, Box<dyn Error>> {
+        let tag = self.read_string()?;
+        let style = match tag.as_str() {
+            "bit" => EncryptionStyle::BitLevel,
+            "byte" => EncryptionStyle::ByteLevel,
+            "char" => EncryptionStyle::CharLevel,
+            "group" => {
+                let size = self.read_number()?;
+                EncryptionStyle::GroupLevel(size)
+            }
+            other => return Err(format!("unknown encryption style {other}").into()),
+        };
+        let cypher = self.read_cypher()?;
+        Ok(Encryption::new(cypher, style))
+    }
+
+    pub fn read_cypher(&mut self) -> Result<StackedCypher, Box<dyn Error>> {
         let size = self.read_number()?;
 
         let mut res = StackedCypher::new();
@@ -171,6 +202,7 @@ mod tests {
 
     use crate::algorithms::{
         permutation::SimplePermutation, stacked::StackedCypher, vertical::VerticalPermutation,
+        Encryption, EncryptionStyle,
     };
 
     use super::{Deserializer, Serializer};
@@ -188,7 +220,7 @@ mod tests {
 
         let expected = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
         let mut buf = BufWriter::new(Vec::new());
-        Serializer::new(&mut buf).write(&cypher).unwrap();
+        Serializer::new(&mut buf).write_cypher(&cypher).unwrap();
         assert_eq!(
             String::from_utf8(buf.into_inner().unwrap()).unwrap(),
             expected
@@ -213,12 +245,38 @@ mod tests {
 
         //since we cannot test the cyphers for equality, use another approach
 
-        let produced = Deserializer::new(source.as_bytes()).read().unwrap();
+        let produced = Deserializer::new(source.as_bytes()).read_cypher().unwrap();
 
         let expected_output = expected.encrypt(&(0..1000usize).collect::<Vec<_>>());
 
         let produced_output = produced.encrypt(&(0..1000usize).collect::<Vec<_>>());
 
         assert_eq!(expected_output, produced_output);
+    }
+
+    #[test]
+    fn work_with_encryption() {
+        let cypher = {
+            let mut cypher = StackedCypher::new();
+
+            cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
+            cypher.push_unpadding(VerticalPermutation::new(
+                2,
+                4,
+                SimplePermutation::trivial(4),
+            ));
+            cypher
+        };
+
+        let encryption = Encryption::new(cypher, EncryptionStyle::GroupLevel(3));
+
+        let mut buf = BufWriter::new(Vec::new());
+
+        Serializer::new(&mut buf).write(&encryption).unwrap();
+
+        let s = buf.into_inner().unwrap();
+
+        let produced = Deserializer::new(s.as_slice()).read().unwrap();
+        assert_eq!(produced, encryption);
     }
 }

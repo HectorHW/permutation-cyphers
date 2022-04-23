@@ -3,7 +3,7 @@ use crate::{
     algorithms::permutation,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RailFenceCypher {
     pub(super) rows: usize,
     pub(super) columns: usize,

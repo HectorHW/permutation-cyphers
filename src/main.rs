@@ -30,5 +30,5 @@ fn main() {
 
     let mut stdout = std::io::stdout();
 
-    Serializer::new(&mut stdout).write(&cypher).unwrap();
+    Serializer::new(&mut stdout).write_cypher(&cypher).unwrap();
 }

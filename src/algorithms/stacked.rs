@@ -10,7 +10,7 @@ use super::{
     vertical::VerticalPermutation,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Algorithm {
     Permutation(PermutationBlockDecoder<SimplePermutation>),
     RailFence(PermutationBlockDecoder<RailFenceCypher>),
@@ -67,13 +67,13 @@ impl Algorithm {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PadApproach {
     Padding(Algorithm),
     Unpadding(Algorithm),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StackedCypher {
     algorithms: Vec<PadApproach>,
 }

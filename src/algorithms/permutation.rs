@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SimplePermutation {
     pub(super) indices: Vec<usize>,
 }

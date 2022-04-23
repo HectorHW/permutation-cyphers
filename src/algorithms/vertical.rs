@@ -2,7 +2,7 @@ use crate::algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerticalPermutation {
     pub(super) rows: usize,
     pub(super) columns: usize,

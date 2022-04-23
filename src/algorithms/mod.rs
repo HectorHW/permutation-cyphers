@@ -48,12 +48,13 @@ mod tests {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Encryption {
     algorithm: StackedCypher,
     style: EncryptionStyle,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum EncryptionStyle {
     BitLevel,
     ByteLevel,
@@ -171,7 +172,7 @@ mod usecase_tests {
         serialization::Deserializer::new(
             "2 padding simple 4 1 3 0 2 unpadding vertical 4 2 simple 4 0 1 2 3 ".as_bytes(),
         )
-        .read()
+        .read_cypher()
         .unwrap()
     }
 
