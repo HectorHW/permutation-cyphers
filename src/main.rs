@@ -27,7 +27,7 @@ fn main() {
             .expect("error while reading from stdin");
         buffer = buffer.trim_end_matches(char::is_whitespace).to_string();
         match execute_statement(&mut interpreter, &buffer) {
-            Ok(ExecResult::Ok(m)) => println!("OK. {}", m),
+            Ok(ExecResult::Message(m)) => println!("OK. {}", m),
 
             Ok(ExecResult::Exit) => break,
             Err(e) => println!("ERROR. {e}"),
@@ -35,8 +35,8 @@ fn main() {
     }
 }
 
-enum ExecResult {
-    Ok(String),
+pub enum ExecResult {
+    Message(String),
     Exit,
 }
 
@@ -45,10 +45,6 @@ fn execute_statement(
     line: &str,
 ) -> Result<ExecResult, Box<dyn Error>> {
     use parse::command_parser;
-
-    if line.to_string().to_uppercase() == "EXIT" {
-        return Ok(ExecResult::Exit);
-    }
 
     let stmt = command_parser::stmt(line).map_err(|e| {
         chic::Error::new(format!("parse error: expected {}", e.expected))
@@ -62,5 +58,5 @@ fn execute_statement(
             .to_string()
     })?;
 
-    interpreter.visit_stmt(&stmt).map(ExecResult::Ok)
+    interpreter.visit_stmt(&stmt)
 }

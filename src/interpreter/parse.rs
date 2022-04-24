@@ -12,6 +12,7 @@ pub enum Stmt {
     Save,
     List,
     Reload,
+    Exit,
     Describe(String),
     Delete(String),
     Encrypt {
@@ -96,7 +97,8 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             encrypt() /
             decrypt() /
             delete() /
-            add()
+            add() /
+            exit()
 
         rule database() -> Stmt =
             _ pick: pick_approach()? _ "DATABASE" __ s:string() _  {Stmt::DatabasePick{
@@ -143,6 +145,11 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
         rule add() -> Stmt =
             _ "ADD" __ n:string() __ "AS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
                 Stmt::Add{ name: n, algos: a }
+            }
+
+        rule exit() -> Stmt =
+            _ "EXIT" _ {
+                Stmt::Exit
             }
 
         rule algorithm() -> AlgorithmDescription =

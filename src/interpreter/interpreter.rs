@@ -14,6 +14,7 @@ use crate::{
         vertical::VerticalPermutation,
     },
     database::Database,
+    ExecResult,
 };
 
 use super::parse::{
@@ -37,7 +38,7 @@ impl Interpreter {
         }
     }
 
-    pub fn visit_stmt(&mut self, stmt: &Stmt) -> Result<String, Box<dyn Error>> {
+    pub fn visit_stmt(&mut self, stmt: &Stmt) -> Result<ExecResult, Box<dyn Error>> {
         match stmt {
             Stmt::DatabasePick { name, create } => {
                 let mut options = std::fs::File::options();
@@ -63,19 +64,21 @@ impl Interpreter {
                     format!("loaded database {}", name)
                 };
                 self.db = Some(database);
-                Ok(message)
+                Ok(ExecResult::Message(message))
             }
 
             Stmt::Save => {
                 self.require_database()?;
                 self.db.as_mut().unwrap().save()?;
-                Ok("saved database".to_string())
+                Ok(ExecResult::Message("saved database".to_string()))
             }
 
             Stmt::Reload => {
                 self.require_database()?.reload()?;
-                Ok("reloaded database".to_string())
+                Ok(ExecResult::Message("reloaded database".to_string()))
             }
+
+            Stmt::Exit => Ok(ExecResult::Exit),
 
             Stmt::List => {
                 self.require_database()?;
@@ -90,7 +93,10 @@ impl Interpreter {
                     .collect::<Vec<_>>();
                 let total = items.len();
 
-                Ok(format!("entries:\n{}\n({total} total)", items.join("\n")))
+                Ok(ExecResult::Message(format!(
+                    "entries:\n{}\n({total} total)",
+                    items.join("\n")
+                )))
             }
 
             Stmt::Describe(name) => Ok({
@@ -132,7 +138,7 @@ impl Interpreter {
                     .collect::<Vec<_>>()
                     .join("; ");
 
-                format!("algorithms: [{items}]")
+                ExecResult::Message(format!("algorithms: [{items}]"))
             }),
             Stmt::Encrypt { from, key, to } => {
                 let db = self.require_database()?;
@@ -147,10 +153,10 @@ impl Interpreter {
                 let (sizes, msg) = key.encrypt(&data)?;
 
                 match to {
-                    DataTarget::Console => Ok(format!(
+                    DataTarget::Console => Ok(ExecResult::Message(format!(
                         "{sizes:?} {msg:?} (\"{}\")",
                         escape(&String::from_utf8_lossy(&msg))
-                    )),
+                    ))),
                     DataTarget::File(f) => {
                         let mut file = File::options().write(true).create(true).open(f)?;
 
@@ -160,7 +166,7 @@ impl Interpreter {
                             file.write_all(&size.to_be_bytes())?;
                         }
                         file.write_all(msg.as_slice())?;
-                        Ok(format!("written {f}"))
+                        Ok(ExecResult::Message(format!("written {f}")))
                     }
                 }
             }
@@ -200,7 +206,7 @@ impl Interpreter {
                 let message = key.decrypt(data)?;
 
                 match to {
-                    DataTarget::Console => Ok(format!("message: {}", {
+                    DataTarget::Console => Ok(ExecResult::Message(format!("message: {}", {
                         if let Ok(msg) = String::from_utf8(message.clone()) {
                             format!("\"{}\"", msg)
                         } else {
@@ -209,17 +215,17 @@ impl Interpreter {
                                 escape(&String::from_utf8_lossy(&message))
                             )
                         }
-                    })),
+                    }))),
                     DataTarget::File(f) => {
                         let mut file = File::options().write(true).create(true).open(f)?;
                         file.write_all(message.as_slice())?;
-                        Ok(format!("written {f}"))
+                        Ok(ExecResult::Message(format!("written {f}")))
                     }
                 }
             }
 
             Stmt::Delete(n) => match self.require_database()?.delete(n) {
-                Some(_) => Ok(format!("deleted key {n}")),
+                Some(_) => Ok(ExecResult::Message(format!("deleted key {n}"))),
                 None => Err("no such key".into()),
             },
 
@@ -270,10 +276,10 @@ impl Interpreter {
                     cypher
                 };
 
-                Ok(match db.add(name, cypher) {
+                Ok(ExecResult::Message(match db.add(name, cypher) {
                     Some(_) => format!("replaced cypher \"{}\"", name),
                     None => format!("added cypher \"{}\"", name),
-                })
+                }))
             }
         }
     }
