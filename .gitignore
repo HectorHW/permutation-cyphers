@@ -1,2 +1,4 @@
 /target
 keys.db
+*.bin
+*.txt
