@@ -241,6 +241,11 @@ impl Interpreter {
                     }
                 }
             }
+
+            Stmt::Delete(n) => match self.require_database()?.delete(n) {
+                Some(_) => Ok(format!("deleted key {n}")),
+                None => Err("no such key".into()),
+            },
         }
     }
 }

@@ -13,6 +13,7 @@ pub enum Stmt {
     List,
     Reload,
     Describe(String),
+    Delete(String),
     Encrypt {
         from: DataSource,
         key: String,
@@ -68,7 +69,8 @@ peg::parser! {
             reload() /
             describe() /
             encrypt() /
-            decrypt()
+            decrypt() /
+            delete()
 
         rule database() -> Stmt =
             _ pick: pick_approach()? _ "DATABASE" __ s:string() _  {Stmt::DatabasePick{
@@ -88,6 +90,11 @@ peg::parser! {
         rule describe() -> Stmt =
             _ "DESCRIBE" __ n:string() _ {
                 Stmt::Describe(n)
+            }
+
+        rule delete() -> Stmt =
+            _ "DELETE" __ n:string() _ {
+                Stmt::Delete(n)
             }
 
         rule encrypt() -> Stmt =

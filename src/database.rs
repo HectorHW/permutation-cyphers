@@ -22,6 +22,10 @@ impl Database {
         self.data.insert(key.to_owned(), value);
     }
 
+    pub fn delete(&mut self, key: &str) -> Option<Encryption> {
+        self.data.remove(key)
+    }
+
     pub fn load_from_file(file: File) -> Result<Database, Box<dyn Error>> {
         let mut database = Database {
             data: Default::default(),
