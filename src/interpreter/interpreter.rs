@@ -223,10 +223,16 @@ impl Interpreter {
                     let message = key.decrypt_raw(data)?;
 
                     match to {
-                        DataTarget::Console => Ok(format!(
-                            "{message:?} ({})",
-                            String::from_utf8_lossy(&message)
-                        )),
+                        DataTarget::Console => Ok(format!("message: {}", {
+                            if let Ok(msg) = String::from_utf8(message.clone()) {
+                                format!("\"{}\"", msg)
+                            } else {
+                                format!(
+                                    "\"{}\" (not all characters were parsed normally)",
+                                    String::from_utf8_lossy(&message)
+                                )
+                            }
+                        })),
                         DataTarget::File(f) => {
                             let mut file = File::options().write(true).create(true).open(f)?;
                             file.write_all(message.as_slice())?;
