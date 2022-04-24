@@ -54,6 +54,8 @@ mod test {
         algorithms::{decode::PermutationBlockDecoder, permutation::SimplePermutation},
     };
 
+    use crate::algorithms::cyphers::{PadDecrypt, PadEncrypt, UnpadDecrypt, UnpadEncrypt};
+
     #[test]
     fn permutation() {
         let permutation = SimplePermutation::try_from(vec![1, 3, 0, 2]).unwrap();
@@ -70,5 +72,40 @@ mod test {
 
         let decrypted = cypher.decrypt_block(encrypted);
         assert_eq!(decrypted, original_data);
+    }
+
+    #[test]
+    fn random_test_padded() {
+        let data: Vec<usize> = (0..100).collect();
+
+        for size in 2..60 {
+            for _ in 0..100 {
+                let permutation = SimplePermutation::random_with_size(size).unwrap();
+                let cypher = PermutationBlockDecoder::new(permutation);
+
+                let encrypted = cypher.encrypt_with_pad(&data);
+
+                assert_eq!(
+                    data,
+                    cypher.decrypt_with_pad(&encrypted.1, encrypted.0).unwrap()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn random_test_unpadded() {
+        let data: Vec<usize> = (0..100).collect();
+
+        for size in 2..60 {
+            for _ in 0..100 {
+                let permutation = SimplePermutation::random_with_size(size).unwrap();
+                let cypher = PermutationBlockDecoder::new(permutation);
+
+                let encrypted = cypher.encrypt_unpad(&data);
+
+                assert_eq!(data, cypher.decrypt_unpad(&encrypted));
+            }
+        }
     }
 }
