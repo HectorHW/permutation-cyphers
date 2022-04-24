@@ -1,0 +1,13 @@
+DATABASE "keys.db";
+ADD "Alice" AS [UNPADDING CHAR PERMUTATION(GENERATED(1000))];
+ENCRYPT FROM "war.txt" WITH "Alice" INTO "war_alice.txt";
+ADD "Bob" AS [
+    UNPADDING CHAR PERMUTATION(1, 3, 0, 2), 
+    UNPADDING GROUP(3) VERTICAL(2, 4, [1, 3, 0, 2]),
+    PADDING BYTE RAILFENCE(10, 20),
+    PADDING BIT RAILFENCE(10, 16)];
+SAVE;
+ENCRYPT "i love frogs cause they are green" WITH "Bob" INTO "frogs_bob.txt";
+
+DECRYPT FROM "war_alice.txt" WITH "Alice" INTO "war_decrypted.txt";
+DECRYPT FROM "frogs_bob.txt" WITH "Bob";

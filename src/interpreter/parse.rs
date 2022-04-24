@@ -77,7 +77,7 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             }
 
         pub rule program() -> Vec<Stmt> =
-            s: (stmt() ** ";") {s}
+            _ s: (stmt() ** (_ ";" _)) _ ";"? _ {s}
 
         pub rule pick_approach() -> PickApproach =
             "CREATE" __ {

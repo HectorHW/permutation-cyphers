@@ -35,15 +35,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "infosec"
-version = "0.1.0"
-dependencies = [
- "chic",
- "peg",
- "rand",
-]
-
-[[package]]
 name = "libc"
 version = "0.2.124"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -75,6 +66,15 @@ name = "peg-runtime"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9b0efd3ba03c3a409d44d60425f279ec442bcf0b9e63ff4e410da31c8b0f69f"
+
+[[package]]
+name = "permutations"
+version = "0.1.0"
+dependencies = [
+ "chic",
+ "peg",
+ "rand",
+]
 
 [[package]]
 name = "ppv-lite86"

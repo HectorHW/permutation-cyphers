@@ -1,4 +1,5 @@
 use std::{
+    env,
     error::Error,
     io::{stdin, BufRead},
 };
@@ -13,6 +14,50 @@ mod interpreter;
 #[cfg(test)]
 mod tests;
 fn main() {
+    let args = env::args().collect::<Vec<_>>();
+    if args.len() == 1 {
+        run_repl();
+    } else if args.len() == 2 {
+        let filename = args.get(1).unwrap();
+        run_file(filename).unwrap();
+    } else {
+        panic!("please provide 0 or 1 argument")
+    }
+}
+
+fn run_file(filename: &str) -> Result<(), Box<dyn Error>> {
+    use parse::command_parser;
+
+    let file_content = std::fs::read_to_string(filename)?;
+
+    let program = command_parser::program(&file_content).map_err(|e| {
+        chic::Error::new(format!("parse error: expected {}", e.expected))
+            .error(
+                e.location.line,
+                e.location.column,
+                e.location.column + 1,
+                file_content,
+                "",
+            )
+            .to_string()
+    })?;
+
+    let mut interpreter = Interpreter::new();
+
+    for stmt in program {
+        println!(
+            "{}",
+            match interpreter.visit_stmt(&stmt)? {
+                ExecResult::Message(s) => s,
+                ExecResult::Exit => return Ok(()),
+            }
+        )
+    }
+
+    Ok(())
+}
+
+fn run_repl() {
     let mut interpreter = Interpreter::new();
 
     let stdin = stdin();
