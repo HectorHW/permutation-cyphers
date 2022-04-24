@@ -18,8 +18,8 @@ impl Database {
         &self.data
     }
 
-    pub fn add(&mut self, key: &str, value: Encryption) {
-        self.data.insert(key.to_owned(), value);
+    pub fn add(&mut self, key: &str, value: Encryption) -> Option<Encryption> {
+        self.data.insert(key.to_owned(), value)
     }
 
     pub fn delete(&mut self, key: &str) -> Option<Encryption> {
@@ -34,13 +34,6 @@ impl Database {
 
         database.reload()?;
         Ok(database)
-    }
-
-    pub fn new(file: File) -> Database {
-        Database {
-            data: Default::default(),
-            file,
-        }
     }
 
     pub fn reload(&mut self) -> Result<(), Box<dyn Error>> {

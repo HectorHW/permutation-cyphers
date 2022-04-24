@@ -1,3 +1,5 @@
+use crate::algorithms::EncryptionStyle;
+
 pub enum PickApproach {
     Create,
     Load,
@@ -24,6 +26,11 @@ pub enum Stmt {
         key: String,
         to: DataTarget,
     },
+    Add {
+        name: String,
+        algo_type: EncryptionStyle,
+        algos: Vec<AlgorithmDescription>,
+    },
 }
 
 pub enum DataSource {
@@ -42,8 +49,23 @@ pub enum DecryptSource {
     File(String),
 }
 
+pub struct AlgorithmDescription {
+    pub padding: bool,
+    pub algo_type: AlgorithmType,
+}
+
+pub enum AlgorithmType {
+    Permutation(Option<Vec<usize>>),
+    RailFence(Option<(usize, usize)>),
+    Vertical(Option<(usize, usize, Vec<usize>)>),
+}
+
 peg::parser! {
+
     pub grammar command_parser() for str {
+
+use crate::algorithms::EncryptionStyle;
+
 
         rule string() -> String =
             "\"" s:$([^'"']*) "\"" {
@@ -70,7 +92,8 @@ peg::parser! {
             describe() /
             encrypt() /
             decrypt() /
-            delete()
+            delete() /
+            add()
 
         rule database() -> Stmt =
             _ pick: pick_approach()? _ "DATABASE" __ s:string() _  {Stmt::DatabasePick{
@@ -113,6 +136,60 @@ peg::parser! {
                     from: source, key, to: target }
         }
 
+
+        rule add() -> Stmt =
+            _ "ADD" __ n:string() __ "AS" __ style:encrypt_style() __ "ALGORITHMS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
+                Stmt::Add{ name: n, algo_type: style, algos: a }
+            }
+
+        rule algorithm() -> AlgorithmDescription =
+            style:pad_style() __ "PERMUTATION" _ "(" _ "GENERATED" _ ")" {
+                AlgorithmDescription{
+                    padding: style, algo_type: AlgorithmType::Permutation(None) }
+            }/
+            style:pad_style() __ "PERMUTATION" _ "(" _ n:number()++("," _) ","? _ ")" {
+                AlgorithmDescription{
+                    padding: style, algo_type: AlgorithmType::Permutation(Some(n)) }
+            }/
+            style:pad_style() __ "RAILFENCE" _ "(" _ "GENERATED" _ ")" {
+                AlgorithmDescription{padding:style,
+                    algo_type: AlgorithmType::RailFence(None) }
+            }/
+            style:pad_style() __ "RAILFENCE" _ "(" _ a:number() _ "," _ b:number() _ ")" {
+                AlgorithmDescription{padding:style,
+                    algo_type: AlgorithmType::RailFence(Some((a, b))) }
+            }/
+            style:pad_style() __ "VERTICAL" _ "(" _ "GENERATED" _ ")" {
+                AlgorithmDescription{padding:style,
+                    algo_type: AlgorithmType::Vertical(None) }
+            }/
+            style:pad_style() __ "VERTICAL" _ "(" _ a:number() _ "," _ b:number() _ "," _ "[" _ numbers: number()++(_ "," _) _ ","? _ "]" _ ")" {
+                AlgorithmDescription{padding:style,
+                    algo_type: AlgorithmType::Vertical(Some((a, b, numbers))) }
+            }
+
+
+
+
+        rule pad_style() -> bool =
+            "PADDING" {true}/
+            "UNPADDING" {false}
+
+        rule encrypt_style() -> EncryptionStyle =
+            "BIT" {
+                EncryptionStyle::Bit
+            }/
+            "BYTE" {
+                EncryptionStyle::Byte
+            }/
+            "CHAR" {
+                EncryptionStyle::Char
+            }/
+            "GROUP" _ "(" n:number() _ ")" {
+                EncryptionStyle::Group(n)
+            }
+
+
         rule encrypt_source() -> DataSource =
             "FROM" __ s:string() {
                 DataSource::File(s)
@@ -149,6 +226,10 @@ peg::parser! {
                 (n, data.into_iter().map(|i| i as u8).collect())
             }
 
+        rule number_vector() -> Vec<usize> =
+            "[" n:number()**__ "]" {
+                n
+            }
 
         rule number() -> usize =
             s:['0'..='9']+ {
