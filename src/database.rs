@@ -2,27 +2,27 @@ use std::io::{prelude::*, BufWriter};
 use std::{collections::HashMap, error::Error, fs::File};
 
 use crate::algorithms::serialization::{Deserializer, Serializer};
-use crate::algorithms::Encryption;
+use crate::algorithms::stacked::StackedCypher;
 
 pub struct Database {
-    data: HashMap<String, Encryption>,
+    data: HashMap<String, StackedCypher>,
     file: std::fs::File,
 }
 
 impl Database {
-    pub fn get<'e>(&'e self, key_name: &str) -> Option<&'e Encryption> {
+    pub fn get<'e>(&'e self, key_name: &str) -> Option<&'e StackedCypher> {
         self.data.get(key_name)
     }
 
-    pub fn get_inner(&self) -> &HashMap<String, Encryption> {
+    pub fn get_inner(&self) -> &HashMap<String, StackedCypher> {
         &self.data
     }
 
-    pub fn add(&mut self, key: &str, value: Encryption) -> Option<Encryption> {
+    pub fn add(&mut self, key: &str, value: StackedCypher) -> Option<StackedCypher> {
         self.data.insert(key.to_owned(), value)
     }
 
-    pub fn delete(&mut self, key: &str) -> Option<Encryption> {
+    pub fn delete(&mut self, key: &str) -> Option<StackedCypher> {
         self.data.remove(key)
     }
 
@@ -52,7 +52,7 @@ impl Database {
                 let mut deserializer = Deserializer::new(config.as_bytes());
                 Ok((name.to_string(), deserializer.read()?))
             })
-            .collect::<Result<HashMap<String, Encryption>, Box<dyn Error>>>()?;
+            .collect::<Result<HashMap<String, StackedCypher>, Box<dyn Error>>>()?;
 
         self.data = entries;
 

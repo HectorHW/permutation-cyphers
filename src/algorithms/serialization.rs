@@ -9,9 +9,7 @@ use crate::algorithms::{
     stacked::{Algorithm, PadApproach, StackedCypher},
 };
 
-use super::{
-    rail_fence::RailFenceCypher, vertical::VerticalPermutation, Encryption, EncryptionStyle,
-};
+use super::{rail_fence::RailFenceCypher, stacked::EncryptionStyle, vertical::VerticalPermutation};
 
 pub struct Serializer<'w, W: Write> {
     writer: &'w mut W,
@@ -22,33 +20,23 @@ impl<'w, W: Write> Serializer<'w, W> {
         Self { writer: target }
     }
 
-    pub fn write(&mut self, encryption: &Encryption) -> io::Result<()> {
-        let tag = match encryption.get_style() {
-            super::EncryptionStyle::Bit => "bit".to_string(),
-            super::EncryptionStyle::Byte => "byte".to_string(),
-            super::EncryptionStyle::Char => "char".to_string(),
-            super::EncryptionStyle::Group(g) => format!("group {g}"),
-        };
-
-        self.write_str(&tag)?;
-
-        self.write_cypher(&encryption.algorithm)
-    }
-
-    pub fn write_cypher(&mut self, cypher: &StackedCypher) -> io::Result<()> {
+    pub fn write(&mut self, cypher: &StackedCypher) -> io::Result<()> {
         self.write_number(cypher.len())?;
 
-        for algorithm in cypher.items() {
-            match algorithm {
-                PadApproach::Padding(b) => {
-                    self.write_str("padding")?;
-                    self.write_permutation(b)
-                }
-                PadApproach::Unpadding(b) => {
-                    self.write_str("unpadding")?;
-                    self.write_permutation(b)
-                }
-            }?;
+        for (pad, style, algorithm) in cypher.items() {
+            match pad {
+                PadApproach::Padding => self.write_str("padding")?,
+                PadApproach::Unpadding => self.write_str("unpadding")?,
+            }
+
+            self.write_str(&match *style {
+                EncryptionStyle::Bit => "bit".to_string(),
+                EncryptionStyle::Byte => "byte".to_string(),
+                EncryptionStyle::Char => "char".to_string(),
+                EncryptionStyle::Group(g) => format!("group {g}"),
+            })?;
+
+            self.write_permutation(algorithm)?;
         }
 
         Ok(())
@@ -105,36 +93,32 @@ impl<R: BufRead> Deserializer<R> {
         Self { reader }
     }
 
-    pub fn read(&mut self) -> Result<Encryption, Box<dyn Error>> {
-        let tag = self.read_string()?;
-        let style = match tag.as_str() {
-            "bit" => EncryptionStyle::Bit,
-            "byte" => EncryptionStyle::Byte,
-            "char" => EncryptionStyle::Char,
-            "group" => {
-                let size = self.read_number()?;
-                EncryptionStyle::Group(size)
-            }
-            other => return Err(format!("unknown encryption style {other}").into()),
-        };
-        let cypher = self.read_cypher()?;
-        Ok(Encryption::new(cypher, style))
-    }
-
-    pub fn read_cypher(&mut self) -> Result<StackedCypher, Box<dyn Error>> {
+    pub fn read(&mut self) -> Result<StackedCypher, Box<dyn Error>> {
         let size = self.read_number()?;
 
         let mut res = StackedCypher::new();
 
         for _ in 0..size {
-            let approach = self.read_string()?;
+            let pad = match self.read_string()?.as_str() {
+                "padding" => PadApproach::Padding,
+                "unpadding" => PadApproach::Unpadding,
+                other => return Err(format!("unknown padding type {other}").into()),
+            };
+
+            let style = match self.read_string()?.as_str() {
+                "bit" => EncryptionStyle::Bit,
+                "byte" => EncryptionStyle::Byte,
+                "char" => EncryptionStyle::Char,
+                "group" => {
+                    let size = self.read_number()?;
+                    EncryptionStyle::Group(size)
+                }
+                other => return Err(format!("unknown encryption style {other}").into()),
+            };
 
             let algo = self.read_permutation()?;
-            match approach.as_str() {
-                "padding" => res.push_padding(algo),
-                "unpadding" => res.push_unpadding(algo),
-                other => return Err(format!("unknown approach {other}").into()),
-            }
+
+            res.push(pad, style, algo);
         }
 
         Ok(res)
@@ -199,23 +183,32 @@ mod tests {
 
     use crate::algorithms::{
         permutation::SimplePermutation, stacked::StackedCypher, vertical::VerticalPermutation,
-        Encryption, EncryptionStyle,
     };
 
     use super::{Deserializer, Serializer};
+
+    use crate::algorithms::stacked::EncryptionStyle::*;
+    use crate::algorithms::stacked::PadApproach::*;
 
     #[test]
     fn should_serialize() {
         let mut cypher = StackedCypher::new();
 
-        cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-        cypher.push_unpadding(
+        cypher.push(
+            Padding,
+            Char,
+            SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap(),
+        );
+        cypher.push(
+            Unpadding,
+            Byte,
             VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
         );
 
-        let expected = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
+        let expected =
+            "2 padding char simple 4 3 2 0 1 unpadding byte vertical 4 2 simple 4 0 1 2 3 ";
         let mut buf = BufWriter::new(Vec::new());
-        Serializer::new(&mut buf).write_cypher(&cypher).unwrap();
+        Serializer::new(&mut buf).write(&cypher).unwrap();
         assert_eq!(
             String::from_utf8(buf.into_inner().unwrap()).unwrap(),
             expected
@@ -224,13 +217,19 @@ mod tests {
 
     #[test]
     fn should_deserialize() {
-        let source = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
+        let source = "2 padding bit simple 4 3 2 0 1 unpadding byte vertical 2 4 simple 4 0 1 2 3 ";
 
         let expected = {
             let mut cypher = StackedCypher::new();
 
-            cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-            cypher.push_unpadding(
+            cypher.push(
+                Padding,
+                Bit,
+                SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap(),
+            );
+            cypher.push(
+                Unpadding,
+                Byte,
                 VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
             );
             cypher
@@ -238,36 +237,12 @@ mod tests {
 
         //since we cannot test the cyphers for equality, use another approach
 
-        let produced = Deserializer::new(source.as_bytes()).read_cypher().unwrap();
+        let produced = Deserializer::new(source.as_bytes()).read().unwrap();
 
-        let expected_output = expected.encrypt(&(0..1000usize).collect::<Vec<_>>());
+        let expected_output = expected.encrypt(&(0..255u8).collect::<Vec<_>>()).unwrap();
 
-        let produced_output = produced.encrypt(&(0..1000usize).collect::<Vec<_>>());
+        let produced_output = produced.encrypt(&(0..255u8).collect::<Vec<_>>()).unwrap();
 
         assert_eq!(expected_output, produced_output);
-    }
-
-    #[test]
-    fn work_with_encryption() {
-        let cypher = {
-            let mut cypher = StackedCypher::new();
-
-            cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-            cypher.push_unpadding(
-                VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
-            );
-            cypher
-        };
-
-        let encryption = Encryption::new(cypher, EncryptionStyle::Group(3));
-
-        let mut buf = BufWriter::new(Vec::new());
-
-        Serializer::new(&mut buf).write(&encryption).unwrap();
-
-        let s = buf.into_inner().unwrap();
-
-        let produced = Deserializer::new(s.as_slice()).read().unwrap();
-        assert_eq!(produced, encryption);
     }
 }

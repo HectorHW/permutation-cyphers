@@ -1,5 +1,3 @@
-use crate::algorithms::EncryptionStyle;
-
 pub enum PickApproach {
     Create,
     Load,
@@ -28,7 +26,6 @@ pub enum Stmt {
     },
     Add {
         name: String,
-        algo_type: EncryptionStyle,
         algos: Vec<AlgorithmDescription>,
     },
 }
@@ -50,7 +47,8 @@ pub enum DecryptSource {
 }
 
 pub struct AlgorithmDescription {
-    pub padding: bool,
+    pub padding: crate::algorithms::stacked::PadApproach,
+    pub style: crate::algorithms::stacked::EncryptionStyle,
     pub algo_type: AlgorithmType,
 }
 
@@ -69,7 +67,7 @@ peg::parser! {
 
     pub grammar command_parser() for str {
 
-use crate::algorithms::EncryptionStyle;
+use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
 
         rule string() -> String =
@@ -143,42 +141,46 @@ use crate::algorithms::EncryptionStyle;
 
 
         rule add() -> Stmt =
-            _ "ADD" __ n:string() __ "AS" __ style:encrypt_style() __ "ALGORITHMS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
-                Stmt::Add{ name: n, algo_type: style, algos: a }
+            _ "ADD" __ n:string() __ "AS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
+                Stmt::Add{ name: n, algos: a }
             }
 
         rule algorithm() -> AlgorithmDescription =
-            style:pad_style() __ "PERMUTATION" _ "(" _ "GENERATED" _ "(" _ size:number() _ ")" _ ")" {
+            pad: pad_style() __ style: encrypt_style() __ desc: algorithm_style() {
                 AlgorithmDescription{
-                    padding: style, algo_type: AlgorithmType::Permutation(PermutationType::Generated(size)) }
+                    padding:pad,
+                     style,
+                    algo_type:desc
+                }
+            }
+
+
+        rule algorithm_style() -> AlgorithmType =
+            "PERMUTATION" _ "(" _ "GENERATED" _ "(" _ size:number() _ ")" _ ")" {
+                AlgorithmType::Permutation(PermutationType::Generated(size))
             }/
-            style:pad_style() __ "PERMUTATION" _ "(" _ n:number()++("," _) ","? _ ")" {
-                AlgorithmDescription{
-                    padding: style, algo_type: AlgorithmType::Permutation(PermutationType::Manual(n)) }
+             "PERMUTATION" _ "(" _ n:number()++("," _) ","? _ ")" {
+                 AlgorithmType::Permutation(PermutationType::Manual(n))
             }/
-            style:pad_style() __ "RAILFENCE" _ "(" _ "GENERATED" _ ")" {
-                AlgorithmDescription{padding:style,
-                    algo_type: AlgorithmType::RailFence(None) }
+            "RAILFENCE" _ "(" _ "GENERATED" _ ")" {
+                 AlgorithmType::RailFence(None)
             }/
-            style:pad_style() __ "RAILFENCE" _ "(" _ a:number() _ "," _ b:number() _ ")" {
-                AlgorithmDescription{padding:style,
-                    algo_type: AlgorithmType::RailFence(Some((a, b))) }
+            "RAILFENCE" _ "(" _ a:number() _ "," _ b:number() _ ")" {
+                 AlgorithmType::RailFence(Some((a, b)))
             }/
-            style:pad_style() __ "VERTICAL" _ "(" _ "GENERATED" _ ")" {
-                AlgorithmDescription{padding:style,
-                    algo_type: AlgorithmType::Vertical(None) }
+            "VERTICAL" _ "(" _ "GENERATED" _ ")" {
+                 AlgorithmType::Vertical(None)
             }/
-            style:pad_style() __ "VERTICAL" _ "(" _ a:number() _ "," _ b:number() _ "," _ "[" _ numbers: number()++(_ "," _) _ ","? _ "]" _ ")" {
-                AlgorithmDescription{padding:style,
-                    algo_type: AlgorithmType::Vertical(Some((a, b, numbers))) }
+            "VERTICAL" _ "(" _ a:number() _ "," _ b:number() _ "," _ "[" _ numbers: number()++(_ "," _) _ ","? _ "]" _ ")" {
+                AlgorithmType::Vertical(Some((a, b, numbers)))
             }
 
 
 
 
-        rule pad_style() -> bool =
-            "PADDING" {true}/
-            "UNPADDING" {false}
+        rule pad_style() -> PadApproach =
+            "PADDING" {PadApproach::Padding}/
+            "UNPADDING" {PadApproach::Unpadding}
 
         rule encrypt_style() -> EncryptionStyle =
             "BIT" {

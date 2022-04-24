@@ -1,6 +1,6 @@
 use crate::{
     algorithms::cyphers::{PadDecrypt, PadEncrypt, UnpadDecrypt, UnpadEncrypt},
-    datastructs::ProvidesPad,
+    datastructs::{BitVector, ProvidesPad},
 };
 
 use std::{error::Error, fmt::Debug};
@@ -71,15 +71,23 @@ impl Algorithm {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum PadApproach {
-    Padding(Algorithm),
-    Unpadding(Algorithm),
+    Padding,
+    Unpadding,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum EncryptionStyle {
+    Bit,
+    Byte,
+    Char,
+    Group(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StackedCypher {
-    algorithms: Vec<PadApproach>,
+    algorithms: Vec<(PadApproach, EncryptionStyle, Algorithm)>,
 }
 
 impl StackedCypher {
@@ -87,44 +95,99 @@ impl StackedCypher {
         StackedCypher { algorithms: vec![] }
     }
 
-    pub fn push_padding<C>(&mut self, cypher: C)
+    pub fn push<C>(&mut self, pad_approach: PadApproach, style: EncryptionStyle, cypher: C)
     where
         Algorithm: From<C>,
     {
-        self.algorithms.push(PadApproach::Padding(cypher.into()));
+        self.algorithms.push((pad_approach, style, cypher.into()))
     }
 
-    pub fn push_unpadding<C>(&mut self, cypher: C)
-    where
-        Algorithm: From<C>,
-    {
-        self.algorithms.push(PadApproach::Unpadding(cypher.into()));
+    fn e_with_padding<T: ProvidesPad + Clone>(
+        data: &[T],
+        op: &Algorithm,
+        pad_approach: PadApproach,
+    ) -> (usize, Vec<T>) {
+        match pad_approach {
+            PadApproach::Padding => op.epad(data),
+            PadApproach::Unpadding => (data.len(), op.eunpad(data)),
+        }
     }
 
-    pub fn encrypt<T: Clone + ProvidesPad>(&self, data: &[T]) -> (Vec<usize>, Vec<T>) {
-        self.algorithms
-            .iter()
-            .fold((vec![], data.to_vec()), |(mut indices, data), op| {
-                let (created_indices, data) = match op {
-                    PadApproach::Padding(op) => op.epad(&data),
-                    PadApproach::Unpadding(op) => (data.len(), op.eunpad(&data)),
+    fn d_with_padding<T: ProvidesPad + Clone>(
+        data: &[T],
+        size: usize,
+        op: &Algorithm,
+        pad_approach: PadApproach,
+    ) -> Result<Vec<T>, Box<dyn Error>> {
+        match pad_approach {
+            PadApproach::Padding => op.dpad(data, size),
+            PadApproach::Unpadding => Ok(op.dunpad(data)),
+        }
+    }
+
+    pub fn encrypt(&self, data: &[u8]) -> Result<(Vec<usize>, Vec<u8>), Box<dyn Error>> {
+        self.algorithms.iter().try_fold(
+            (vec![], data.to_vec()),
+            |(mut indices, data), (pad_approach, style, op)| {
+                let (created_indices, data) = match style {
+                    EncryptionStyle::Bit => {
+                        let bits = crate::datastructs::BitVector::from(data.as_slice()).0;
+                        let (size, encrypted) = Self::e_with_padding(&bits, op, *pad_approach);
+                        (size, BitVector(encrypted).into())
+                    }
+                    EncryptionStyle::Byte => Self::e_with_padding(&data, op, *pad_approach),
+                    EncryptionStyle::Char => {
+                        let chars = String::from_utf8(data)?.chars().collect::<Vec<_>>();
+                        let (size, encrypted) = Self::e_with_padding(&chars, op, *pad_approach);
+                        (size, encrypted.into_iter().collect::<String>().into_bytes())
+                    }
+                    &EncryptionStyle::Group(group_size) => {
+                        let string = String::from_utf8(data)?;
+                        let groups =
+                            crate::datastructs::groups_from_str(string.as_str(), group_size)?;
+
+                        let (size, encrypted) = Self::e_with_padding(&groups, op, *pad_approach);
+                        (
+                            size,
+                            crate::datastructs::string_from_groups(&encrypted).into_bytes(),
+                        )
+                    }
                 };
 
                 indices.push(created_indices);
-                (indices, data)
-            })
+                Ok((indices, data))
+            },
+        )
     }
 
-    pub fn decrypt<T: Clone + ProvidesPad>(
-        &self,
-        data: &[T],
-        sizes: &[usize],
-    ) -> Result<Vec<T>, Box<dyn Error>> {
+    pub fn decrypt(&self, (sizes, data): (Vec<usize>, Vec<u8>)) -> Result<Vec<u8>, Box<dyn Error>> {
         self.algorithms.iter().zip(sizes.iter()).rev().try_fold(
             data.to_vec(),
-            |data, (op, &size)| match op {
-                PadApproach::Padding(op) => op.dpad(&data, size),
-                PadApproach::Unpadding(op) => Ok(op.dunpad(&data)),
+            |data, ((pad_approach, style, op), &size)| {
+                let data: Vec<u8> = match style {
+                    EncryptionStyle::Bit => {
+                        let bits = crate::datastructs::BitVector::from(data.as_slice()).0;
+                        let encrypted = Self::d_with_padding(&bits, size, op, *pad_approach)?;
+                        BitVector(encrypted).into()
+                    }
+                    EncryptionStyle::Byte => Self::d_with_padding(&data, size, op, *pad_approach)?,
+                    EncryptionStyle::Char => {
+                        let chars = String::from_utf8(data)?.chars().collect::<Vec<_>>();
+                        let encrypted = Self::d_with_padding(&chars, size, op, *pad_approach)?;
+                        encrypted.into_iter().collect::<String>().into_bytes()
+                    }
+                    &EncryptionStyle::Group(group_size) => {
+                        let string = String::from_utf8(data)?;
+                        let groups =
+                            crate::datastructs::groups_from_str(string.as_str(), group_size)?;
+
+                        let encrypted = Self::d_with_padding(&groups, size, op, *pad_approach)?;
+
+                        crate::datastructs::string_from_groups(&encrypted).into_bytes()
+                    }
+                };
+
+                Ok(data)
             },
         )
     }
@@ -133,7 +196,7 @@ impl StackedCypher {
         self.algorithms.len()
     }
 
-    pub(crate) fn items(&self) -> impl Iterator<Item = &PadApproach> {
+    pub(crate) fn items(&self) -> impl Iterator<Item = &(PadApproach, EncryptionStyle, Algorithm)> {
         self.algorithms.iter()
     }
 }

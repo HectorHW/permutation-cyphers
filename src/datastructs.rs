@@ -1,4 +1,4 @@
-use std::iter::repeat;
+use std::{error::Error, iter::repeat};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Bit(bool);
@@ -82,12 +82,20 @@ pub fn from_bits(bits: &[Bit]) -> u8 {
 #[derive(Clone, Debug)]
 pub struct CharGroup(Vec<char>);
 
-pub fn groups_from_str(s: &str, group_size: usize) -> Vec<CharGroup> {
+pub fn groups_from_str(s: &str, group_size: usize) -> Result<Vec<CharGroup>, Box<dyn Error>> {
     let chars: Vec<char> = s.chars().collect();
-    chars
+    if chars.len() % group_size != 0 {
+        return Err(format!(
+            "error while building groups from string: got {}, expected multiple of {}",
+            chars.len(),
+            group_size
+        )
+        .into());
+    }
+    Ok(chars
         .chunks(group_size)
         .map(|chunk| CharGroup(chunk.to_vec()))
-        .collect()
+        .collect())
 }
 
 pub fn string_from_groups(groups: &[CharGroup]) -> String {

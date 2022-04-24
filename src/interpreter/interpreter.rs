@@ -10,9 +10,8 @@ use crate::{
     algorithms::{
         permutation::SimplePermutation,
         rail_fence::RailFenceCypher,
-        stacked::{Algorithm, PadApproach, StackedCypher},
+        stacked::{Algorithm, EncryptionStyle, PadApproach, StackedCypher},
         vertical::VerticalPermutation,
-        Encryption,
     },
     database::Database,
 };
@@ -95,20 +94,25 @@ impl Interpreter {
             }
 
             Stmt::Describe(name) => Ok({
-                let cypher: &Encryption = self
+                let cypher: &StackedCypher = self
                     .require_database()?
                     .get(name)
                     .ok_or_else(|| format!("no such entry {name}"))?;
 
-                let style = cypher.get_style();
-
-                let items = cypher.get_algorithm().items();
+                let items = cypher.items();
 
                 let items = items
-                    .map(|algo| {
-                        let (pad, algo) = match algo {
-                            PadApproach::Padding(p) => ("padding", p),
-                            PadApproach::Unpadding(p) => ("unpadding", p),
+                    .map(|(pad, style, algo)| {
+                        let pad = match pad {
+                            PadApproach::Padding => "padding",
+                            PadApproach::Unpadding => "unpadding",
+                        };
+
+                        let style = match style {
+                            EncryptionStyle::Bit => "bit".to_string(),
+                            EncryptionStyle::Byte => "byte".to_string(),
+                            EncryptionStyle::Char => "char".to_string(),
+                            EncryptionStyle::Group(g) => format!("group({})", g),
                         };
 
                         let algo = match algo {
@@ -123,54 +127,40 @@ impl Interpreter {
                             }
                         };
 
-                        format!("{pad} {algo}")
+                        format!("{pad} {style} {algo}")
                     })
                     .collect::<Vec<_>>()
                     .join("; ");
 
-                format!("style: {style:?}; algorithms: [{items}]")
+                format!("algorithms: [{items}]")
             }),
             Stmt::Encrypt { from, key, to } => {
                 let db = self.require_database()?;
 
                 let key = db.get(key).ok_or_else(|| format!("no key {key}"))?;
 
-                if key.accepts_characters() {
-                    let data = match from {
-                        DataSource::String(s) => s.clone(),
-                        DataSource::File(f) => std::fs::read_to_string(f)?,
-                    };
-                    let (sizes, msg) = key.encrypt_text(&data)?;
+                let data = match from {
+                    DataSource::String(s) => s.clone().into_bytes(),
+                    DataSource::File(f) => std::fs::read(f)?,
+                };
 
-                    match to {
-                        DataTarget::Console => Ok(format!("{sizes:?} \"{}\"", escape(&msg))),
-                        DataTarget::File(f) => {
-                            let mut file = File::options().write(true).create(true).open(f)?;
-                            file.write_fmt(format_args!("{sizes:?} \"{msg}\""))?;
-                            Ok(format!("written {f}"))
+                let (sizes, msg) = key.encrypt(&data)?;
+
+                match to {
+                    DataTarget::Console => Ok(format!(
+                        "{sizes:?} {msg:?} (\"{}\")",
+                        escape(&String::from_utf8_lossy(&msg))
+                    )),
+                    DataTarget::File(f) => {
+                        let mut file = File::options().write(true).create(true).open(f)?;
+
+                        file.write_all(&sizes.len().to_be_bytes())?;
+
+                        for size in sizes {
+                            file.write_all(&size.to_be_bytes())?;
                         }
-                    }
-                } else {
-                    let data = match from {
-                        DataSource::String(s) => s.clone().into_bytes(),
-                        DataSource::File(f) => std::fs::read(f)?,
-                    };
-
-                    let (sizes, msg) = key.encrypt_raw(&data)?;
-
-                    match to {
-                        DataTarget::Console => Ok(format!("{sizes:?} {msg:?}")),
-                        DataTarget::File(f) => {
-                            let mut file = File::options().write(true).create(true).open(f)?;
-
-                            file.write_all(&sizes.len().to_be_bytes())?;
-
-                            for size in sizes {
-                                file.write_all(&size.to_be_bytes())?;
-                            }
-                            file.write_all(msg.as_slice())?;
-                            Ok(format!("written {f}"))
-                        }
+                        file.write_all(msg.as_slice())?;
+                        Ok(format!("written {f}"))
                     }
                 }
             }
@@ -188,63 +178,42 @@ impl Interpreter {
 
                     DecryptSource::File(f) => {
                         let mut file = File::options().read(true).open(f)?;
-                        if key.accepts_characters() {
-                            use super::parse;
-                            let mut content = String::new();
-                            file.read_to_string(&mut content)?;
-                            let (sizes, input) = parse::command_parser::string_data(&content)
-                                .map_err(|e| format!("failed to parse input file: {e}"))?;
-                            (sizes, input.into_bytes())
-                        } else {
+
+                        let mut buf = [0u8; std::mem::size_of::<usize>()];
+                        file.read_exact(&mut buf)?;
+
+                        let total_indices = usize::from_be_bytes(buf);
+
+                        let mut sizes = vec![];
+
+                        for _ in 0..total_indices {
                             let mut buf = [0u8; std::mem::size_of::<usize>()];
                             file.read_exact(&mut buf)?;
-
-                            let total_indices = usize::from_be_bytes(buf);
-
-                            let mut sizes = vec![];
-
-                            for _ in 0..total_indices {
-                                let mut buf = [0u8; std::mem::size_of::<usize>()];
-                                file.read_exact(&mut buf)?;
-                                sizes.push(usize::from_be_bytes(buf));
-                            }
-                            let mut data = vec![];
-                            file.read_to_end(&mut data)?;
-                            (sizes, data)
+                            sizes.push(usize::from_be_bytes(buf));
                         }
+                        let mut data = vec![];
+                        file.read_to_end(&mut data)?;
+                        (sizes, data)
                     }
                 };
 
-                if key.accepts_characters() {
-                    let message = key.decrypt_text(data)?;
+                let message = key.decrypt(data)?;
 
-                    match to {
-                        DataTarget::Console => Ok(format!("message: \"{}\"", escape(&message))),
-                        DataTarget::File(f) => {
-                            let mut file = File::options().write(true).create(true).open(f)?;
-                            file.write_all(message.as_bytes())?;
-                            Ok(format!("written {f}"))
+                match to {
+                    DataTarget::Console => Ok(format!("message: {}", {
+                        if let Ok(msg) = String::from_utf8(message.clone()) {
+                            format!("\"{}\"", msg)
+                        } else {
+                            format!(
+                                "\"{}\" (not all characters were parsed normally)",
+                                escape(&String::from_utf8_lossy(&message))
+                            )
                         }
-                    }
-                } else {
-                    let message = key.decrypt_raw(data)?;
-
-                    match to {
-                        DataTarget::Console => Ok(format!("message: {}", {
-                            if let Ok(msg) = String::from_utf8(message.clone()) {
-                                format!("\"{}\"", msg)
-                            } else {
-                                format!(
-                                    "\"{}\" (not all characters were parsed normally)",
-                                    String::from_utf8_lossy(&message)
-                                )
-                            }
-                        })),
-                        DataTarget::File(f) => {
-                            let mut file = File::options().write(true).create(true).open(f)?;
-                            file.write_all(message.as_slice())?;
-                            Ok(format!("written {f}"))
-                        }
+                    })),
+                    DataTarget::File(f) => {
+                        let mut file = File::options().write(true).create(true).open(f)?;
+                        file.write_all(message.as_slice())?;
+                        Ok(format!("written {f}"))
                     }
                 }
             }
@@ -254,18 +223,15 @@ impl Interpreter {
                 None => Err("no such key".into()),
             },
 
-            Stmt::Add {
-                name,
-                algo_type,
-                algos,
-            } => {
+            Stmt::Add { name, algos } => {
                 let db = self.require_database()?;
 
                 let cypher = {
                     let mut cypher = StackedCypher::new();
 
                     for algo in algos {
-                        let padding = algo.padding;
+                        let pad = algo.padding;
+                        let style = algo.style;
                         let algo: Algorithm = match &algo.algo_type {
                             AlgorithmType::Permutation(PermutationType::Generated(size)) => {
                                 SimplePermutation::random_with_size(*size)?.into()
@@ -299,18 +265,12 @@ impl Interpreter {
                                 VerticalPermutation::try_new(*rows, *columns, permutation)?.into()
                             }
                         };
-                        if padding {
-                            cypher.push_padding(algo);
-                        } else {
-                            cypher.push_unpadding(algo)
-                        }
+                        cypher.push(pad, style, algo);
                     }
                     cypher
                 };
 
-                let encryption = Encryption::new(cypher, *algo_type);
-
-                Ok(match db.add(name, encryption) {
+                Ok(match db.add(name, cypher) {
                     Some(_) => format!("replaced cypher \"{}\"", name),
                     None => format!("added cypher \"{}\"", name),
                 })

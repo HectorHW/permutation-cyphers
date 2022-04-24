@@ -166,18 +166,30 @@ mod tests {
     use crate::algorithms::stacked::StackedCypher;
     use crate::algorithms::vertical::VerticalPermutation;
 
+    use crate::algorithms::stacked::{EncryptionStyle::*, PadApproach::*};
+
     fn get_cypher() -> StackedCypher {
         let mut cypher = StackedCypher::new();
         let size = 3usize + rand::random::<usize>() % 10usize;
         let mut permutation_idx = (0..size).collect::<Vec<_>>();
         permutation_idx.shuffle(&mut thread_rng());
 
-        cypher.push_padding(SimplePermutation::try_from(permutation_idx.clone()).unwrap());
+        cypher.push(
+            Padding,
+            Byte,
+            SimplePermutation::try_from(permutation_idx.clone()).unwrap(),
+        );
 
-        cypher.push_unpadding(SimplePermutation::try_from(permutation_idx.clone()).unwrap());
+        cypher.push(
+            Unpadding,
+            Byte,
+            SimplePermutation::try_from(permutation_idx.clone()).unwrap(),
+        );
 
-        cypher.push_padding(RailFenceCypher::try_new(3, 8).unwrap());
-        cypher.push_padding(
+        cypher.push(Padding, Byte, RailFenceCypher::try_new(3, 8).unwrap());
+        cypher.push(
+            Padding,
+            Byte,
             VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
         );
 
@@ -186,15 +198,15 @@ mod tests {
 
     #[test]
     fn randomly_test() {
-        let expected: Vec<usize> = (0..15).collect();
+        let expected: Vec<u8> = (0..15).collect();
 
         for _ in 0..1000 {
             let encoder = get_cypher();
 
-            let (indices, items) = encoder.encrypt(&expected);
+            let data = encoder.encrypt(&expected).unwrap();
 
             assert_eq!(
-                encoder.decrypt(&items, &indices).unwrap(),
+                encoder.decrypt(data).unwrap(),
                 expected,
                 "testing {:?}",
                 encoder
