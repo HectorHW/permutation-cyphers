@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::{
     algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt},
     algorithms::permutation,
@@ -10,12 +12,20 @@ pub struct RailFenceCypher {
 }
 
 impl RailFenceCypher {
-    pub fn new(rows: usize, columns: usize) -> Self {
-        assert_ne!(rows, 0);
-        assert_ne!(columns, 0);
-        assert!(rows < columns);
+    pub fn try_new(rows: usize, columns: usize) -> Result<Self, Box<dyn Error>> {
+        if rows == 0 {
+            return Err("number of rows cannot be zero in rail fence cypher".into());
+        }
 
-        Self { rows, columns }
+        if rows == 0 {
+            return Err("number of columns cannot be zero in rail fence cypher".into());
+        }
+
+        if rows >= columns {
+            return Err("number of columns must be greater than number of rows".into());
+        }
+
+        Ok(Self { rows, columns })
     }
 }
 
@@ -77,7 +87,7 @@ mod tests {
 
     #[test]
     fn encrypt() {
-        let cypher = RailFenceCypher::new(3, 8);
+        let cypher = RailFenceCypher::try_new(3, 8).unwrap();
 
         let data = "abcdefgh".chars().collect::<Vec<_>>();
         assert_eq!(
@@ -88,7 +98,7 @@ mod tests {
 
     #[test]
     fn indices() {
-        let cypher = RailFenceCypher::new(3, 8);
+        let cypher = RailFenceCypher::try_new(3, 8).unwrap();
         // 0 1 2 3 4 5 6 7
         // 0 4 1 3 5 7 2 6
         assert_eq!(cypher.encrypt_indices(), vec![0, 2, 6, 3, 1, 4, 7, 5]);

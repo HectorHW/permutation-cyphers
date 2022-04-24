@@ -164,10 +164,7 @@ impl<R: BufRead> Deserializer<R> {
     }
 
     fn read_rail_fence(&mut self) -> Result<RailFenceCypher, Box<dyn Error>> {
-        Ok(RailFenceCypher::new(
-            self.read_number()?,
-            self.read_number()?,
-        ))
+        RailFenceCypher::try_new(self.read_number()?, self.read_number()?)
     }
 
     fn read_vertical(&mut self) -> Result<VerticalPermutation, Box<dyn Error>> {
@@ -176,7 +173,7 @@ impl<R: BufRead> Deserializer<R> {
         let _tag = self.read_string()?;
         let permutation = self.read_simple_permutation()?;
 
-        Ok(VerticalPermutation::new(rows, columns, permutation))
+        VerticalPermutation::try_new(rows, columns, permutation)
     }
 
     fn read_permutation(&mut self) -> Result<Algorithm, Box<dyn Error>> {
@@ -212,11 +209,9 @@ mod tests {
         let mut cypher = StackedCypher::new();
 
         cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-        cypher.push_unpadding(VerticalPermutation::new(
-            2,
-            4,
-            SimplePermutation::trivial(4),
-        ));
+        cypher.push_unpadding(
+            VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
+        );
 
         let expected = "2 padding simple 4 3 2 0 1 unpadding vertical 4 2 simple 4 0 1 2 3 ";
         let mut buf = BufWriter::new(Vec::new());
@@ -235,11 +230,9 @@ mod tests {
             let mut cypher = StackedCypher::new();
 
             cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-            cypher.push_unpadding(VerticalPermutation::new(
-                2,
-                4,
-                SimplePermutation::trivial(4),
-            ));
+            cypher.push_unpadding(
+                VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
+            );
             cypher
         };
 
@@ -260,11 +253,9 @@ mod tests {
             let mut cypher = StackedCypher::new();
 
             cypher.push_padding(SimplePermutation::try_from(vec![3, 2, 0, 1]).unwrap());
-            cypher.push_unpadding(VerticalPermutation::new(
-                2,
-                4,
-                SimplePermutation::trivial(4),
-            ));
+            cypher.push_unpadding(
+                VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
+            );
             cypher
         };
 

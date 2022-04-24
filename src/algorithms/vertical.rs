@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::algorithms::cyphers::{BlockEncrypt, Blocky, IndexEncrypt};
 
 use super::permutation::SimplePermutation;
@@ -10,16 +12,30 @@ pub struct VerticalPermutation {
 }
 
 impl VerticalPermutation {
-    pub fn new(rows: usize, columns: usize, permutation: SimplePermutation) -> Self {
-        assert_ne!(rows, 0);
-        assert_ne!(columns, 0);
-        assert_eq!(permutation.get_block_size(), columns);
+    pub fn try_new(
+        rows: usize,
+        columns: usize,
+        permutation: SimplePermutation,
+    ) -> Result<Self, Box<dyn Error>> {
+        if rows == 0 {
+            return Err("number of rows must be greater than zero in vertical permutation".into());
+        }
 
-        Self {
+        if columns == 0 {
+            return Err(
+                "number of columns must be greater than zero in vertical permutation".into(),
+            );
+        }
+
+        if permutation.get_block_size() != columns {
+            return Err("size of permutation must match number of columns".into());
+        }
+
+        Ok(Self {
             rows,
             columns,
             permutation,
-        }
+        })
     }
 
     pub fn run<T: Clone>(&self, data: Vec<T>) -> Vec<T> {
@@ -69,7 +85,7 @@ mod tests {
 
         let original_data = "abcdefgh".chars().collect::<Vec<_>>();
 
-        let vertical = VerticalPermutation::new(2, 4, permutation);
+        let vertical = VerticalPermutation::try_new(2, 4, permutation).unwrap();
 
         let cypher = PermutationBlockDecoder::new(vertical);
 
@@ -77,7 +93,7 @@ mod tests {
 
         assert_eq!(encrypted, "cgaedhbf".chars().collect::<Vec<_>>());
 
-        let decrypted = cypher.decrypt_with_pad(&encrypted, size);
+        let decrypted = cypher.decrypt_with_pad(&encrypted, size).unwrap();
         assert_eq!(decrypted, original_data);
     }
 }

@@ -140,13 +140,13 @@ impl Encryption {
             EncryptionStyle::Char => {
                 let data = String::from_utf8(data.to_vec())?;
                 let chars = data.chars().collect::<Vec<_>>();
-                let decrypted = self.algorithm.decrypt(&chars, &sizes);
+                let decrypted = self.algorithm.decrypt(&chars, &sizes)?;
                 Ok(decrypted.into_iter().collect())
             }
             EncryptionStyle::Group(group_size) => {
                 let data = String::from_utf8(data.to_vec())?;
                 let groups = groups_from_str(&data, group_size);
-                let decrypted = self.algorithm.decrypt(&groups, &sizes);
+                let decrypted = self.algorithm.decrypt(&groups, &sizes)?;
                 Ok(string_from_groups(&decrypted))
             }
         }
@@ -157,10 +157,10 @@ impl Encryption {
         match self.style {
             EncryptionStyle::Bit => {
                 let data = BitVector::from(data.as_slice());
-                let decrypted = self.algorithm.decrypt(&data.0, &sizes);
+                let decrypted = self.algorithm.decrypt(&data.0, &sizes)?;
                 Ok(BitVector::from(decrypted).into())
             }
-            EncryptionStyle::Byte => Ok(self.algorithm.decrypt(&data, &sizes)),
+            EncryptionStyle::Byte => Ok(self.algorithm.decrypt(&data, &sizes)?),
             EncryptionStyle::Char => Err("cannot decrypt to raw on char level".into()),
             EncryptionStyle::Group(_) => Err("cannot decrypt to raw on char group level".into()),
         }

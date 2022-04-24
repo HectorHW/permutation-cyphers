@@ -1,3 +1,5 @@
+use std::error::Error;
+
 use crate::{algorithms::move_by_indices, datastructs::ProvidesPad};
 
 pub trait Blocky {
@@ -31,7 +33,11 @@ pub trait PadEncrypt: BlockEncrypt {
 }
 
 pub trait PadDecrypt: BlockDecrypt {
-    fn decrypt_with_pad<T: Clone>(&self, data: &[T], original_size: usize) -> Vec<T>;
+    fn decrypt_with_pad<T: Clone>(
+        &self,
+        data: &[T],
+        original_size: usize,
+    ) -> Result<Vec<T>, Box<dyn Error>>;
 }
 
 pub trait UnpadEncrypt: BlockEncrypt {
@@ -69,7 +75,19 @@ where
 }
 
 impl<C: BlockDecrypt> PadDecrypt for C {
-    fn decrypt_with_pad<T: Clone>(&self, data: &[T], original_size: usize) -> Vec<T> {
+    fn decrypt_with_pad<T: Clone>(
+        &self,
+        data: &[T],
+        original_size: usize,
+    ) -> Result<Vec<T>, Box<dyn Error>> {
+        if data.len() % self.get_block_size() != 0 {
+            return Err(format!(
+                "failure while decrypting: got {} items, expected multiples of {}",
+                data.len(),
+                self.get_block_size()
+            )
+            .into());
+        }
         assert_eq!(data.len() % self.get_block_size(), 0);
         let mut decrypted = data
             .chunks(self.get_block_size())
@@ -77,7 +95,7 @@ impl<C: BlockDecrypt> PadDecrypt for C {
             .flat_map(|chunk| self.decrypt_block(chunk))
             .collect::<Vec<_>>();
         decrypted.truncate(original_size);
-        decrypted
+        Ok(decrypted)
     }
 }
 
@@ -118,7 +136,9 @@ impl<C: PadEncrypt + PadDecrypt> UnpadDecrypt for C {
             })
             .collect::<Vec<_>>();
 
+        //unwrap here because padded data is guranteed to have appropriate block size
         self.decrypt_with_pad(&padded, padded.len())
+            .unwrap()
             .into_iter()
             .flatten()
             .collect()
@@ -154,12 +174,10 @@ mod tests {
 
         cypher.push_unpadding(SimplePermutation::try_from(permutation_idx.clone()).unwrap());
 
-        cypher.push_padding(RailFenceCypher::new(3, 8));
-        cypher.push_padding(VerticalPermutation::new(
-            2,
-            4,
-            SimplePermutation::trivial(4),
-        ));
+        cypher.push_padding(RailFenceCypher::try_new(3, 8).unwrap());
+        cypher.push_padding(
+            VerticalPermutation::try_new(2, 4, SimplePermutation::trivial(4)).unwrap(),
+        );
 
         cypher
     }
@@ -174,7 +192,7 @@ mod tests {
             let (indices, items) = encoder.encrypt(&expected);
 
             assert_eq!(
-                encoder.decrypt(&items, &indices),
+                encoder.decrypt(&items, &indices).unwrap(),
                 expected,
                 "testing {:?}",
                 encoder

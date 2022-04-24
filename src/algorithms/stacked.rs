@@ -3,7 +3,7 @@ use crate::{
     datastructs::ProvidesPad,
 };
 
-use std::fmt::Debug;
+use std::{error::Error, fmt::Debug};
 
 use super::{
     decode::PermutationBlockDecoder, permutation::SimplePermutation, rail_fence::RailFenceCypher,
@@ -43,7 +43,11 @@ impl Algorithm {
             Algorithm::Vertical(p) => p.encrypt_with_pad(data),
         }
     }
-    pub fn dpad<T: Clone + ProvidesPad>(&self, data: &[T], original_size: usize) -> Vec<T> {
+    pub fn dpad<T: Clone + ProvidesPad>(
+        &self,
+        data: &[T],
+        original_size: usize,
+    ) -> Result<Vec<T>, Box<dyn Error>> {
         match self {
             Algorithm::Permutation(p) => p.decrypt_with_pad(data, original_size),
             Algorithm::RailFence(p) => p.decrypt_with_pad(data, original_size),
@@ -111,15 +115,18 @@ impl StackedCypher {
             })
     }
 
-    pub fn decrypt<T: Clone + ProvidesPad>(&self, data: &[T], sizes: &[usize]) -> Vec<T> {
-        self.algorithms
-            .iter()
-            .zip(sizes.iter())
-            .rev()
-            .fold(data.to_vec(), |data, (op, &size)| match op {
+    pub fn decrypt<T: Clone + ProvidesPad>(
+        &self,
+        data: &[T],
+        sizes: &[usize],
+    ) -> Result<Vec<T>, Box<dyn Error>> {
+        self.algorithms.iter().zip(sizes.iter()).rev().try_fold(
+            data.to_vec(),
+            |data, (op, &size)| match op {
                 PadApproach::Padding(op) => op.dpad(&data, size),
-                PadApproach::Unpadding(op) => op.dunpad(&data),
-            })
+                PadApproach::Unpadding(op) => Ok(op.dunpad(&data)),
+            },
+        )
     }
 
     pub(crate) fn len(&self) -> usize {

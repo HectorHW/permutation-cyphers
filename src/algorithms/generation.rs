@@ -10,7 +10,7 @@ impl Distribution<RailFenceCypher> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> RailFenceCypher {
         let columns = rng.gen_range(4..=16);
         let rows = rng.gen_range(2..=(columns - 2));
-        RailFenceCypher::new(rows, columns)
+        RailFenceCypher::try_new(rows, columns).unwrap()
     }
 }
 
@@ -32,7 +32,7 @@ impl Distribution<VerticalPermutation> for Standard {
             indices.shuffle(rng);
             SimplePermutation::try_from(indices).unwrap()
         };
-        VerticalPermutation::new(rows, columns, permutation)
+        VerticalPermutation::try_new(rows, columns, permutation).unwrap()
     }
 }
 
