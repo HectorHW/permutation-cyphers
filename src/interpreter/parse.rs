@@ -143,9 +143,15 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
 
         rule add() -> Stmt =
-            _ "ADD" __ n:string() __ "AS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
+            _ "ADD" __ n:string() __ "AS" __ a:one_or_more_algorithms() _ {
                 Stmt::Add{ name: n, algos: a }
             }
+
+        rule one_or_more_algorithms() -> Vec<AlgorithmDescription> =
+            "[" _ a:algorithm()**(_ "," _) _ "]" {
+                a
+            }/
+            a:algorithm() {vec![a]}
 
         rule exit() -> Stmt =
             _ "EXIT" _ {
