@@ -55,9 +55,14 @@ pub struct AlgorithmDescription {
 }
 
 pub enum AlgorithmType {
-    Permutation(Option<Vec<usize>>),
+    Permutation(PermutationType),
     RailFence(Option<(usize, usize)>),
     Vertical(Option<(usize, usize, Vec<usize>)>),
+}
+
+pub enum PermutationType {
+    Generated(usize),
+    Manual(Vec<usize>),
 }
 
 peg::parser! {
@@ -143,13 +148,13 @@ use crate::algorithms::EncryptionStyle;
             }
 
         rule algorithm() -> AlgorithmDescription =
-            style:pad_style() __ "PERMUTATION" _ "(" _ "GENERATED" _ ")" {
+            style:pad_style() __ "PERMUTATION" _ "(" _ "GENERATED" _ "(" _ size:number() _ ")" _ ")" {
                 AlgorithmDescription{
-                    padding: style, algo_type: AlgorithmType::Permutation(None) }
+                    padding: style, algo_type: AlgorithmType::Permutation(PermutationType::Generated(size)) }
             }/
             style:pad_style() __ "PERMUTATION" _ "(" _ n:number()++("," _) ","? _ ")" {
                 AlgorithmDescription{
-                    padding: style, algo_type: AlgorithmType::Permutation(Some(n)) }
+                    padding: style, algo_type: AlgorithmType::Permutation(PermutationType::Manual(n)) }
             }/
             style:pad_style() __ "RAILFENCE" _ "(" _ "GENERATED" _ ")" {
                 AlgorithmDescription{padding:style,

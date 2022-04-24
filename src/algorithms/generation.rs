@@ -1,6 +1,9 @@
+use std::error::Error;
+
 use rand::distributions::Distribution;
 use rand::distributions::Standard;
 use rand::prelude::SliceRandom;
+use rand::thread_rng;
 
 use super::permutation::SimplePermutation;
 use super::rail_fence::RailFenceCypher;
@@ -33,6 +36,16 @@ impl Distribution<VerticalPermutation> for Standard {
             SimplePermutation::try_from(indices).unwrap()
         };
         VerticalPermutation::try_new(rows, columns, permutation).unwrap()
+    }
+}
+impl SimplePermutation {
+    pub fn random_with_size(size: usize) -> Result<Self, Box<dyn Error>> {
+        if size == 0 {
+            return Err("size of permutation must be greater than zero".into());
+        }
+        let mut indices = (0usize..size).collect::<Vec<_>>();
+        indices.shuffle(&mut thread_rng());
+        Ok(SimplePermutation::try_from(indices).unwrap())
     }
 }
 

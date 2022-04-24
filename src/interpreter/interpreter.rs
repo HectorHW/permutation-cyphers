@@ -17,7 +17,9 @@ use crate::{
     database::Database,
 };
 
-use super::parse::{AlgorithmType, DataSource, DataTarget, DecryptSource, PickApproach, Stmt};
+use super::parse::{
+    AlgorithmType, DataSource, DataTarget, DecryptSource, PermutationType, PickApproach, Stmt,
+};
 
 pub struct Interpreter {
     db: Option<Database>,
@@ -265,11 +267,11 @@ impl Interpreter {
                     for algo in algos {
                         let padding = algo.padding;
                         let algo: Algorithm = match &algo.algo_type {
-                            AlgorithmType::Permutation(None) => {
-                                thread_rng().gen::<SimplePermutation>().into()
+                            AlgorithmType::Permutation(PermutationType::Generated(size)) => {
+                                SimplePermutation::random_with_size(*size)?.into()
                             }
 
-                            AlgorithmType::Permutation(Some(config)) => {
+                            AlgorithmType::Permutation(PermutationType::Manual(config)) => {
                                 SimplePermutation::try_from(config.clone())
                                     .ok_or_else(|| {
                                         <Box<dyn Error>>::from("misconfigured permutation")
