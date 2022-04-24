@@ -64,14 +64,14 @@ impl<'w, W: Write> Serializer<'w, W> {
 
     fn write_rail_fence(&mut self, p: &RailFenceCypher) -> io::Result<()> {
         self.write_str("rail")?;
-        self.write_number(p.columns)?;
-        self.write_number(p.rows)
+        self.write_number(p.rows)?;
+        self.write_number(p.columns)
     }
 
     fn write_vertical_permutation(&mut self, p: &VerticalPermutation) -> io::Result<()> {
         self.write_str("vertical")?;
-        self.write_number(p.columns)?;
         self.write_number(p.rows)?;
+        self.write_number(p.columns)?;
         self.write_simple_permutation(&p.permutation)
     }
 
@@ -206,7 +206,7 @@ mod tests {
         );
 
         let expected =
-            "2 padding char simple 4 3 2 0 1 unpadding byte vertical 4 2 simple 4 0 1 2 3 ";
+            "2 padding char simple 4 3 2 0 1 unpadding byte vertical 2 4 simple 4 0 1 2 3 ";
         let mut buf = BufWriter::new(Vec::new());
         Serializer::new(&mut buf).write(&cypher).unwrap();
         assert_eq!(
