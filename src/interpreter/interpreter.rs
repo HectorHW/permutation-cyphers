@@ -65,6 +65,12 @@ impl Interpreter {
                 self.db.as_mut().unwrap().save()?;
                 Ok("saved database".to_string())
             }
+
+            Stmt::Reload => {
+                self.require_database()?.reload()?;
+                Ok("reloaded database".to_string())
+            }
+
             Stmt::List => {
                 self.require_database()?;
 

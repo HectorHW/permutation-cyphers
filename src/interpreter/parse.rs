@@ -11,6 +11,7 @@ pub enum Stmt {
     },
     Save,
     List,
+    Reload,
     Describe(String),
     Encrypt {
         from: DataSource,
@@ -64,6 +65,7 @@ peg::parser! {
             database()/
             save()/
             list() /
+            reload() /
             describe() /
             encrypt() /
             decrypt()
@@ -76,6 +78,9 @@ peg::parser! {
 
         rule save() -> Stmt =
             _ "SAVE" _ {Stmt::Save}
+
+        rule reload() -> Stmt =
+            _ "RELOAD" _ {Stmt::Reload}
 
         rule list() -> Stmt =
             _ "LIST" _ {Stmt::List}
