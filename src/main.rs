@@ -50,7 +50,17 @@ fn execute_statement(
         return Ok(ExecResult::Exit);
     }
 
-    let stmt = command_parser::stmt(line)?;
+    let stmt = command_parser::stmt(line).map_err(|e| {
+        chic::Error::new(format!("parse error: expected {}", e.expected))
+            .error(
+                e.location.line,
+                e.location.column,
+                e.location.column + 1,
+                line,
+                "",
+            )
+            .to_string()
+    })?;
 
     interpreter.visit_stmt(&stmt).map(ExecResult::Ok)
 }
