@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::fmt::Debug;
 
 use crate::{algorithms::move_by_indices, datastructs::ProvidesPad};
 
@@ -74,7 +75,7 @@ where
     }
 }
 
-impl<C: BlockDecrypt> PadDecrypt for C {
+impl<C: BlockDecrypt + Debug> PadDecrypt for C {
     fn decrypt_with_pad<T: Clone>(
         &self,
         data: &[T],
@@ -82,9 +83,10 @@ impl<C: BlockDecrypt> PadDecrypt for C {
     ) -> Result<Vec<T>, Box<dyn Error>> {
         if data.len() % self.get_block_size() != 0 {
             return Err(format!(
-                "failure while decrypting: got {} items, expected multiples of {}",
+                "failure while decrypting: got {} items, expected multiples of {} in {:?}",
                 data.len(),
-                self.get_block_size()
+                self.get_block_size(),
+                self
             )
             .into());
         }

@@ -168,8 +168,8 @@ impl<R: BufRead> Deserializer<R> {
     }
 
     fn read_vertical(&mut self) -> Result<VerticalPermutation, Box<dyn Error>> {
-        let columns = self.read_number()?;
         let rows = self.read_number()?;
+        let columns = self.read_number()?;
         let _tag = self.read_string()?;
         let permutation = self.read_simple_permutation()?;
 

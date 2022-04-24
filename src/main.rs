@@ -9,6 +9,9 @@ mod algorithms;
 mod database;
 mod datastructs;
 mod interpreter;
+
+#[cfg(test)]
+mod tests;
 fn main() {
     let mut interpreter = Interpreter::new();
 

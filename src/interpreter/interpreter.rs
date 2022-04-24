@@ -141,7 +141,7 @@ impl Interpreter {
                     let (sizes, msg) = key.encrypt_text(&data)?;
 
                     match to {
-                        DataTarget::Console => Ok(format!("{sizes:?} \"{msg}\"")),
+                        DataTarget::Console => Ok(format!("{sizes:?} \"{}\"", escape(&msg))),
                         DataTarget::File(f) => {
                             let mut file = File::options().write(true).create(true).open(f)?;
                             file.write_fmt(format_args!("{sizes:?} \"{msg}\""))?;
@@ -179,7 +179,7 @@ impl Interpreter {
 
                 let data = match from {
                     DecryptSource::ConsoleString(sizes, s) => {
-                        (sizes.clone(), s.to_string().into_bytes())
+                        (sizes.clone(), unescape(s)?.into_bytes())
                     }
 
                     DecryptSource::ConsoleRaw(sizes, data) => (sizes.clone(), data.clone()),
@@ -217,7 +217,7 @@ impl Interpreter {
                     let message = key.decrypt_text(data)?;
 
                     match to {
-                        DataTarget::Console => Ok(format!("message: \"{message}\"")),
+                        DataTarget::Console => Ok(format!("message: \"{}\"", escape(&message))),
                         DataTarget::File(f) => {
                             let mut file = File::options().write(true).create(true).open(f)?;
                             file.write_all(message.as_bytes())?;
@@ -315,4 +315,46 @@ impl Interpreter {
             }
         }
     }
+}
+
+fn escape(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| match c {
+            '\0' => vec!['\\', '0'],
+            '\n' => vec!['\\', 'n'],
+            other => vec![other],
+        })
+        .collect()
+}
+
+fn unescape(s: &str) -> Result<String, Box<dyn Error>> {
+    fn unescape_(s: &str) -> Result<String, usize> {
+        let mut input = s.char_indices().peekable();
+
+        let mut res = String::new();
+
+        while input.peek().is_some() {
+            match input.next().unwrap() {
+                (idx, '\\') => match input.peek() {
+                    Some((_, '0')) => {
+                        input.next();
+                        res.push('\0');
+                    }
+                    Some((_, 'n')) => {
+                        input.next();
+                        res.push('\n');
+                    }
+
+                    _ => return Err(idx),
+                },
+
+                (_, other) => {
+                    res.push(other);
+                }
+            }
+        }
+        Ok(res)
+    }
+
+    unescape_(s).map_err(|idx| format!("error while unescaping at {idx}").into())
 }
