@@ -68,8 +68,11 @@ peg::parser! {
 
     pub grammar command_parser() for str {
 
-use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
+    use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
+        rule i(literal: &'static str)
+            = input:$([_]*<{literal.len()}>)
+            {? if input.eq_ignore_ascii_case(literal) { Ok(()) } else { Err(literal) } }
 
         rule string() -> String =
             "\"" s:$([^'"']*) "\"" {
@@ -80,11 +83,11 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             s: (stmt() ** ";") {s}
 
         pub rule pick_approach() -> PickApproach =
-            "CREATE" __ {
+            i("CREATE") __ {
                 PickApproach::Create
             }
             /
-            "LOAD" __ {
+            i("LOAD") __ {
                 PickApproach::Load
             }
 
@@ -101,32 +104,32 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             exit()
 
         rule database() -> Stmt =
-            _ pick: pick_approach()? _ "DATABASE" __ s:string() _  {Stmt::DatabasePick{
+            _ pick: pick_approach()? _ i("DATABASE") __ s:string() _  {Stmt::DatabasePick{
                 name:s,
                 create: pick.unwrap_or(PickApproach::Any)
             }}
 
         rule save() -> Stmt =
-            _ "SAVE" _ {Stmt::Save}
+            _ i("SAVE") _ {Stmt::Save}
 
         rule reload() -> Stmt =
-            _ "RELOAD" _ {Stmt::Reload}
+            _ i("RELOAD") _ {Stmt::Reload}
 
         rule list() -> Stmt =
-            _ "LIST" _ {Stmt::List}
+            _ i("LIST") _ {Stmt::List}
 
         rule describe() -> Stmt =
-            _ "DESCRIBE" __ n:string() _ {
+            _ i("DESCRIBE") __ n:string() _ {
                 Stmt::Describe(n)
             }
 
         rule delete() -> Stmt =
-            _ "DELETE" __ n:string() _ {
+            _ i("DELETE") __ n:string() _ {
                 Stmt::Delete(n)
             }
 
         rule encrypt() -> Stmt =
-            _ "ENCRYPT" __ source:encrypt_source() __ "WITH" __ key:string() _ target:encrypt_target()? _ {
+            _ i("ENCRYPT") __ source:encrypt_source() __ i("WITH") __ key:string() _ target:encrypt_target()? _ {
                 let target = target.unwrap_or(DataTarget::Console);
 
                 Stmt::Encrypt{
@@ -134,7 +137,7 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             }
 
         rule decrypt() -> Stmt =
-        _ "DECRYPT" __ source:decrypt_source() __ "WITH" __ key:string() _ target:encrypt_target()? _ {
+        _ i("DECRYPT") __ source:decrypt_source() __ i("WITH") __ key:string() _ target:encrypt_target()? _ {
             let target = target.unwrap_or(DataTarget::Console);
 
             Stmt::Decrypt{
@@ -143,12 +146,12 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
 
         rule add() -> Stmt =
-            _ "ADD" __ n:string() __ "AS" __ "[" _ a:algorithm()**(_ "," _) _ "]" {
+            _ i("ADD") __ n:string() __ i("AS") __ "[" _ a:algorithm()**(_ "," _) _ "]" {
                 Stmt::Add{ name: n, algos: a }
             }
 
         rule exit() -> Stmt =
-            _ "EXIT" _ {
+            _ i("EXIT") _ {
                 Stmt::Exit
             }
 
@@ -163,22 +166,22 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
 
         rule algorithm_style() -> AlgorithmType =
-            "PERMUTATION" _ "(" _ "GENERATED" _ "(" _ size:number() _ ")" _ ")" {
+            i("PERMUTATION") _ "(" _ i("GENERATED") _ "(" _ size:number() _ ")" _ ")" {
                 AlgorithmType::Permutation(PermutationType::Generated(size))
             }/
-             "PERMUTATION" _ "(" _ n:number()++("," _) ","? _ ")" {
+             i("PERMUTATION") _ "(" _ n:number()++("," _) ","? _ ")" {
                  AlgorithmType::Permutation(PermutationType::Manual(n))
             }/
-            "RAILFENCE" _ "(" _ "GENERATED" _ ")" {
+            i("RAILFENCE") _ "(" _ i("GENERATED") _ ")" {
                  AlgorithmType::RailFence(None)
             }/
-            "RAILFENCE" _ "(" _ a:number() _ "," _ b:number() _ ")" {
+            i("RAILFENCE") _ "(" _ a:number() _ "," _ b:number() _ ")" {
                  AlgorithmType::RailFence(Some((a, b)))
             }/
-            "VERTICAL" _ "(" _ "GENERATED" _ ")" {
+            i("VERTICAL") _ "(" _ i("GENERATED") _ ")" {
                  AlgorithmType::Vertical(None)
             }/
-            "VERTICAL" _ "(" _ a:number() _ "," _ b:number() _ "," _ "[" _ numbers: number()++(_ "," _) _ ","? _ "]" _ ")" {
+            i("VERTICAL") _ "(" _ a:number() _ "," _ b:number() _ "," _ "[" _ numbers: number()++(_ "," _) _ ","? _ "]" _ ")" {
                 AlgorithmType::Vertical(Some((a, b, numbers)))
             }
 
@@ -186,26 +189,26 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
 
 
         rule pad_style() -> PadApproach =
-            "PADDING" {PadApproach::Padding}/
-            "UNPADDING" {PadApproach::Unpadding}
+            i("PADDING") {PadApproach::Padding}/
+            i("UNPADDING") {PadApproach::Unpadding}
 
         rule encrypt_style() -> EncryptionStyle =
-            "BIT" {
+            i("BIT") {
                 EncryptionStyle::Bit
             }/
-            "BYTE" {
+            i("BYTE") {
                 EncryptionStyle::Byte
             }/
-            "CHAR" {
+            i("CHAR") {
                 EncryptionStyle::Char
             }/
-            "GROUP" _ "(" n:number() _ ")" {
+            i("GROUP") _ "(" n:number() _ ")" {
                 EncryptionStyle::Group(n)
             }
 
 
         rule encrypt_source() -> DataSource =
-            "FROM" __ s:string() {
+            i("FROM") __ s:string() {
                 DataSource::File(s)
             } /
             s: string() {
@@ -213,12 +216,12 @@ use crate::algorithms::stacked::{EncryptionStyle, PadApproach};
             }
 
         rule encrypt_target() -> DataTarget =
-            "INTO" __ s:string() {
+            i("INTO") __ s:string() {
                 DataTarget::File(s)
             }
 
         rule decrypt_source() -> DecryptSource =
-            "FROM" __ s:string() {
+            i("FROM") __ s:string() {
                 DecryptSource::File(s)
             } /
 
